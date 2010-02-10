@@ -690,6 +690,7 @@ if __name__ == "__main__":
 
     i = 1
     if sys.argv[i] == '-c':
+        from file_cache import FileCache
         FileCache.cache_location = "/local/projects/d59/assets/nc3cache.db"
         i += 1
     fname = sys.argv[i]
