@@ -4,25 +4,34 @@
 
 if __name__ == "__main__":
     import sys, os, os.path, time
+    import optparse
 
-    from logger import Logger, LOGGER_INFO
+    from logger import *
     from file_cache import FileCache
     from history import History
     from make_slices import Slicer
     
-    Logger().priority = LOGGER_INFO
+    Logger().priority = LOGGER_WARNING
 
-    i = 1
-    if sys.argv[i] == '-c':
-        FileCache.cache_location = "/local/projects/d59/assets/nc3cache.db"
-        i += 1
-    fname = sys.argv[i]
+    parser = optparse.OptionParser("usage: %prog [options] path ...")
+    parser.add_option("-n", "", dest = "mock_slices",
+                      default = False, action = "store_true",
+                      help = "use test images instead of real slices")
+    parser.add_option("-c", "--cache-location", dest = "cache_location",
+                      metavar = "PATH", help = "where to cache NetCDF headers")
+    (options, args) = parser.parse_args()
+
+    if options.cache_location:
+        FileCache.cache_location = options.cache_location
+    mock = options.mock_slices
+
+    fname = args[0]
     h = History(fname, fname, time.gmtime(os.stat(fname).st_mtime))
     fp = file(os.path.basename(fname) + ".json", "w")
     fp.write(h.as_json)
     fp.close()
 
-    for (data, name, action) in Slicer(fname).slices:
+    for (data, name, action) in Slicer(fname, dry_run = mock).slices:
         fp = file(name, 'wb')
         fp.write(data)
         fp.close()
