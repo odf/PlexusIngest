@@ -688,5 +688,9 @@ if __name__ == "__main__":
     
     Logger().priority = LOGGER_INFO
 
-    fname = sys.argv[1]
+    i = 1
+    if sys.argv[i] == '-c':
+        FileCache.cache_location = "/local/projects/d59/assets/nc3cache.db"
+        i += 1
+    fname = sys.argv[i]
     print History(fname, fname, time.gmtime(os.stat(fname).st_mtime)).as_json
