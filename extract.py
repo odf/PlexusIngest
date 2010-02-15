@@ -11,7 +11,7 @@ if __name__ == "__main__":
     from history import History
     from make_slices import Slicer
     
-    Logger().priority = LOGGER_WARNING
+    Logger().priority = LOGGER_INFO
 
     parser = optparse.OptionParser("usage: %prog [options] path ...")
     parser.add_option("-n", "", dest = "mock_slices",
