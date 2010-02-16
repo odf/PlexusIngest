@@ -189,7 +189,7 @@ class Connection:
         uploads = (("data", name, data),)
         
         # -- post the request to the "/update" service and return the results
-        return self.post_form("/imports/create", fields, uploads)
+        return self.post_form("/imports", fields, uploads)
 
 
     def post_image(self, project, sample, attach_to, mtime, data, name,
@@ -216,7 +216,7 @@ class Connection:
         uploads = (("picture[uploaded_data]", name, data),)
         
         # -- post the request to the "/update" service and return the results
-        return self.post_form("/pictures/create", fields, uploads)
+        return self.post_form("/pictures", fields, uploads)
 
 
 def parse_options():
