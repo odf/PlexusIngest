@@ -508,9 +508,11 @@ class History:
             attributes = source
         elif isinstance(source, NC3File):
             attributes = self.extract_attributes(source)
+            fingerprint = source.fingerprint
         elif isinstance(source, str):
             nc3file = NC3File(NC3HeaderInfo(source).header_path)
             attributes = self.extract_attributes(nc3file)
+            fingerprint = nc3file.fingerprint
             nc3file.close()
 
         self.logger = Logger()
@@ -523,7 +525,8 @@ class History:
             main.domain = self.extract_domain(attributes)
             main.data_file = {
                 'name': Patterns.stripped_name(self.name),
-                'date': format_time(self.creation_time)
+                'date': format_time(self.creation_time),
+                'fingerprint': fingerprint
                 }
             if main.name is None:
                 main.name = main.data_file['name']

@@ -14,6 +14,13 @@ import os, os.path, re, struct
 from file_cache import FileCache, SEEK_CUR
 from logger import Logger, LOGGER_TRACE, LOGGER_INFO, LOGGER_WARNING
 
+try:
+    import hashlib
+    def hexdigest(s): return hashlib.md5(s).hexdigest()
+except ImportError:
+    import md5
+    def hexdigest(s): return md5.new(s).hexdigest()
+
 
 class NC3Error(RuntimeError):
     """
@@ -212,6 +219,8 @@ class NC3File:
         self.attributes = self.read_attributes()
         self.variables  = self.read_variables()
         self.header_size = self.file.tell()
+        self.file.seek(0)
+        self.fingerprint = hexdigest(self.file.read(self.header_size))
         
     def get_values(self, type_code, number):
         type = NC_TYPE[type_code]
@@ -390,6 +399,7 @@ class NC3HeaderInfo:
         nc3file = NC3File(entries[0], name)
         self.text = nc3file.header_as_cdl
         self.size = nc3file.header_size
+        self.fingerprint = nc3file.fingerprint
         self.header_path = nc3file.path
         self.filename = "%s.cdf" % nc3file.name
         nc3file.close()
