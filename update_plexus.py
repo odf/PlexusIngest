@@ -286,19 +286,19 @@ class Updater(Connection):
                     data = History(path, path, time.gmtime(mtime)).as_json
                     _, res = self.upload_files(project, sample,
                                                t, ((data, path),))
-                    seen[name]['Identifier'] = res.get('MainNodeExternalID')
-                    seen[name]['Id'] = res.get('MainNodeID')
+                    seen[name]['IdExt'] = res.get('MainNodeExternalID')
+                    seen[name]['IdInt'] = res.get('MainNodeID')
     
             self.log.writeln(str(seen[name]))
 
             # -- extract and upload the slices if appropriate
-            node_id = seen[name]['Identifier']
-            if self.make_slices and node_id:
+            node_info = seen[name]
+            if self.make_slices and (node_info['IdExt'] or node_info['IdInt']):
                 from make_slices import Slicer
                 
                 slices = Slicer(path, seen[name]['Images'], self.replace,
                                 self.dry_run or self.mock_slices,
-                                { "slice-node": seen[name]['Id'] }).slices
+                                { "slice-node": node_info['IdInt'] }).slices
                 if self.dry_run:
                     for (data, name, action) in slices:
                         self.print_action(project, sample, location,
@@ -306,7 +306,7 @@ class Updater(Connection):
                 else:
                     for (data, name, action) in slices:
                         self.upload_files(project, sample, t,
-                                          ((data, name),), node_id)
+                                          ((data, name),), node_info)
         except KeyboardInterrupt, ex:
             raise ex
         except:
