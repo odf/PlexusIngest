@@ -287,6 +287,7 @@ class Updater(Connection):
                     _, res = self.upload_files(project, sample,
                                                t, ((data, path),))
                     seen[name]['Identifier'] = res.get('MainNodeExternalID')
+                    seen[name]['Id'] = res.get('MainNodeID')
     
             self.log.writeln(str(seen[name]))
 
@@ -296,7 +297,8 @@ class Updater(Connection):
                 from make_slices import Slicer
                 
                 slices = Slicer(path, seen[name]['Images'], self.replace,
-                                self.dry_run or self.mock_slices).slices
+                                self.dry_run or self.mock_slices,
+                                { "slice-node": seen[name]['Id'] }).slices
                 if self.dry_run:
                     for (data, name, action) in slices:
                         self.print_action(project, sample, location,

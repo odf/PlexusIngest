@@ -93,7 +93,7 @@ def convert_color_coded(data, mask, use_fixed = False):
     return Image.fromarray(output, 'RGBA')
 
 
-def make_image(a, lo, hi, mask_val, mode):
+def make_image(a, lo, hi, mask_val, mode, info = {}):
     """
     Turns the 2d numpy array <a> into an image, with the string
     <mode> indicating how to convert scalar values into colors. The
@@ -122,7 +122,7 @@ def make_image(a, lo, hi, mask_val, mode):
         raise "unknown mode: '%s'" % mode
 
     # -- return the data string encoding the image
-    return image_as_png(image, { 'Comment': 'This is a test.' })
+    return image_as_png(image, info)
 
 def make_dummy(text, width = 256, height = 256):
     from PIL import ImageDraw
@@ -134,9 +134,9 @@ def make_dummy(text, width = 256, height = 256):
     # -- return the data string encoding the image
     return image_as_png(image)
 
-def image_as_png(image, meta = {}):
-    for (key, val) in meta.items():
-        image.info[key] = val
+def image_as_png(image, info = {}):
+    for (key, val) in info.items():
+        image.info[key] = str(val)
 
     output = StringIO()
     #image.save(output, "PNG")

@@ -268,10 +268,11 @@ class Histogram:
 
 
 class Slice:
-    def __init__(self, size, type, axis, pos, offset):
-        self.axis = axis.lower()
-        self.pos = pos
+    def __init__(self, size, type, axis, pos, offset, info = {}):
+        self.axis   = axis.lower()
+        self.pos    = pos
         self.offset = offset
+        self.info   = info
         self.slice_dims = {'x': (size.z, size.y),
                            'y': (size.z, size.x),
                            'z': (size.y, size.x) }[self.axis]         
@@ -327,7 +328,8 @@ class Slice:
             raise "unexpected array type: %s" % content.dtype
     
         # -- generate and return the data
-        return make_image.make_image(content, lo, hi, mask_val, img_mode)
+        return make_image.make_image(content, lo, hi, mask_val, img_mode,
+                                     self.info)
 
 
 class Slicer:
@@ -353,7 +355,8 @@ class Slicer:
             fp.close()
     """
 
-    def __init__(self, path, existing = [], replace = False, dry_run = False):
+    def __init__(self, path,
+                 existing = [], replace = False, dry_run = False, info = {}):
         self.path      = re.sub("/$", "", path)
         self.name      = re.sub("[._]nc$", "", os.path.basename(self.path))
         self.slicename = re.sub("^tomo", "tom",
@@ -361,13 +364,17 @@ class Slicer:
         self.existing  = existing
         self.replace   = replace
         self.dry_run   = dry_run
+        self.info      = info
         
         self.img_mode  = None
         self._slices   = None
         self.log       = Logger()
     
     def add_slice(self, slices, size, dtype, axis, pos, origin):
-        slice = Slice(size, dtype, axis, pos, origin)
+        info = self.info.copy()
+        info.update({ 'slice-axis': axis, 'slice-pos': pos })
+        slice = Slice(size, dtype, axis, pos, origin, info)
+
         name = slice.make_name(self.slicename)
         if name in self.existing:
             if self.replace:
