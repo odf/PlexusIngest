@@ -121,14 +121,8 @@ def make_image(a, lo, hi, mask_val, mode):
     else:
         raise "unknown mode: '%s'" % mode
 
-    # -- extract the image data in .png format into a binary string
-    output = StringIO()
-    image.save(output, "PNG")
-    content = output.getvalue();
-    output.close()
-    
     # -- return the data string encoding the image
-    return content
+    return image_as_png(image, { 'Comment': 'This is a test.' })
 
 def make_dummy(text, width = 256, height = 256):
     from PIL import ImageDraw
@@ -137,11 +131,41 @@ def make_dummy(text, width = 256, height = 256):
     draw = ImageDraw.Draw(image)
     draw.text((64, 64), text, fill = 'black')
 
-    # -- extract the image data in .png format into a binary string
+    # -- return the data string encoding the image
+    return image_as_png(image)
+
+def image_as_png(image, meta = {}):
+    for (key, val) in meta.items():
+        image.info[key] = val
+
     output = StringIO()
-    image.save(output, "PNG")
+    #image.save(output, "PNG")
+    pngsave(image, output)
     content = output.getvalue();
     output.close()
     
-    # -- return the data string encoding the image
     return content
+
+
+#
+# wrapper around PIL 1.1.6 Image.save to preserve PNG metadata
+#
+# public domain, Nick Galbreath
+# http://blog.modp.com/2007/08/python-pil-and-png-metadata-take-2.html
+#                                                                                                                                       
+def pngsave(im, file):
+    # these can be automatically added to Image.info dict
+    # they are not user-added metadata
+    reserved = ('interlace', 'gamma', 'dpi', 'transparency', 'aspect')
+
+    # undocumented class
+    from PIL import PngImagePlugin
+    meta = PngImagePlugin.PngInfo()
+
+    # copy metadata into new object
+    for k,v in im.info.iteritems():
+        if k in reserved: continue
+        meta.add_text(k, v, 0)
+
+    # and save
+    im.save(file, "PNG", pnginfo=meta)
