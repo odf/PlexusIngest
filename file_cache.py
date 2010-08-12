@@ -41,7 +41,7 @@ class FileCache:
     cache_location = None
     cache_root = None
     force_cache = False
-    cache_limit = 256 * 1024
+    cache_limit = 512 * 1024
     file_count = 0
 
     def __init__(self, path):
