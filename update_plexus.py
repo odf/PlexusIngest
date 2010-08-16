@@ -45,7 +45,8 @@ class Updater(Connection):
         <output>      - object to send output to (default: sys.stdout)
     """
     
-    MAX_ERRORS = 50
+    #MAX_ERRORS = 50
+    MAX_ERRORS = 1000
     
     def __init__(self,  user, password, manager = None,
                  development = False, port = 3000, interactive = False,
@@ -77,7 +78,7 @@ class Updater(Connection):
         self.log.writeln("\n".join("> %s <" % s for s in text.split("\n")),
                          LOGGER_ERROR)
         self.error_count += 1
-        if self.error_count > self.MAX_ERRORS:
+        if self.error_count > self.MAX_ERRORS > 0:
             self.log.writeln(">>> Too many errors - exiting. <<<", LOGGER_PANIC)
             sys.exit(1)
 
@@ -349,6 +350,7 @@ class Updater(Connection):
                                 if not f.startswith('analysis_')
                                 if not f.startswith('fiducial')
                                 if not f.startswith('experiment')
+                                if not f.startswith('block0')
                                 if self.age_okay(os.path.join(path, f)))
 
                 if entries:
