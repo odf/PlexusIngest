@@ -34,7 +34,7 @@ def encode_formdata(fields, files):
         L.append('--' + BOUNDARY)
         L.append('Content-Disposition: form-data; name="%s"' % key)
         L.append('')
-        L.append(value)
+        L.append(str(value))
         
     for (key, filename, value) in files:
         L.append('--' + BOUNDARY)
@@ -43,7 +43,7 @@ def encode_formdata(fields, files):
         L.append('Content-Type: %s' % (mimetypes.guess_type(filename)[0]
                                        or 'application/octet-stream'))
         L.append('')
-        L.append(value)
+        L.append(str(value))
         
     L.append('--' + BOUNDARY + '--')
     L.append('')
