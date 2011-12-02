@@ -294,7 +294,7 @@ class Updater(Connection):
 
             # -- extract and upload the slices if appropriate
             node_info = seen[name]
-            if self.make_slices and (node_info['IdExt'] or node_info['IdInt']):
+            if self.make_slices and (node_info.get('IdExt') or node_info.get('IdInt')):
                 from make_slices import Slicer
                 
                 slices = Slicer(path, seen[name]['Images'], self.replace,
