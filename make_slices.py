@@ -23,6 +23,7 @@ Typical usage:
 
 import os, os.path, re, struct, sys
 import numpy
+import bz2
 
 from logger import Logger, LOGGER_INFO, LOGGER_WARNING
 import make_image
@@ -162,7 +163,10 @@ class VolumeVariable:
         
         file.close()
         
-        fp = open(path, "rb")
+        if path.endswith('.bz2'):
+            fp = bz2.BZ2File(path, 'r', 1024 * 1024)
+        else:
+            fp = open(path, "rb")
         fp.seek(var.data_start)
         for z in z_range:
             buffer = fp.read(bytes_per_slice)

@@ -1,4 +1,4 @@
-import os, os.path, shelve
+import os, os.path, shelve, bz2
 
 from logger import Logger
 
@@ -134,12 +134,11 @@ class FileCache:
             n = (n + k - 1) / k * k
         
         # -- fill the buffer, but don't keep the file open
-        fd = os.open(self.path, os.O_RDONLY)
-        try:
-            self.log.writeln("Reading first %d bytes from file..." % n)
-            self.buffer = os.read(fd, n)
-        finally:
-            os.close(fd)
+        self.log.writeln("Reading first %d bytes from file..." % n)
+        if self.path.endswith('.bz2'):
+            self.bz2_read(n)
+        else:
+            self.os_read(n)
         
         # -- if the file has changed on disk, we are in trouble
         new_stat = os.stat(self.path)
@@ -147,7 +146,21 @@ class FileCache:
             new_stat.st_size != self.stat.st_size
             ):
             raise RuntimeError("File changed on disk while reading.")
-        
+    
+    def os_read(self, size):
+        fd = os.open(self.path, os.O_RDONLY)
+        try:
+            self.buffer = os.read(fd, size)
+        finally:
+            os.close(fd)
+
+    def bz2_read(self, size):
+        fd = bz2.BZ2File(self.path, 'r', self.cache_limit)
+        try:
+            self.buffer = fd.read(size)
+        finally:
+            fd.close()
+
     # -- the following methods work as in standard file objects:
     def close(self):
         self.__put(self.cache_path, { "mtime":  self.stat.st_mtime,
