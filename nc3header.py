@@ -22,6 +22,18 @@ except ImportError:
     def hexdigest(s): return md5.new(s).hexdigest()
 
 
+def looksLikeNetCDF(name):
+    if name.endswith(".bz2"):
+        name = name[:-4]
+    return name.endswith('_nc') or name.endswith('.nc')
+
+def basenameNetCDF(name):
+    if name.endswith(".bz2"):
+        name = name[:-4]
+    if name.endswith(".nc") or name.endswith("_nc"):
+        name = name[:-3]
+    return name
+
 class NC3Error(RuntimeError):
     """
     Class for errors thrown by the NetCDF parser.
@@ -188,11 +200,7 @@ class NC3File:
         self.path = path
         
         # -- use the file name as the data set name if none was given
-        self.name = name or os.path.basename(path)
-        
-        # -- normalize the data set name
-        if self.name.endswith(".nc") or self.name.endswith("_nc"):
-            self.name = self.name[:-3]
+        self.name = basenameNetCDF(name or os.path.basename(path))
             
         # -- some logging
         self.log = Logger()
@@ -379,16 +387,14 @@ class NC3HeaderInfo:
             path = path[:-1]
     
         # -- determine the base name for the header file
-        name = os.path.basename(path)
-        if name.endswith("_nc") or name.endswith(".nc"):
-            name = name[:-3]
+        name = basenameNetCDF(os.path.basename(path))
         
         # -- collect the files under the given path
         if os.path.isdir(path):
             entries = list(os.path.join(root, f)
                            for (root, dirs, files) in os.walk(path)
                            for f in files
-                           if f.endswith('.nc') or f.endswith('_nc'))
+                           if looksLikeNetCDF(f))
             entries.sort()
         else:
             entries = [ path ]
