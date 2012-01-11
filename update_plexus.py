@@ -346,7 +346,7 @@ class Updater(Connection):
                 # -- compose list of potential data sets under this directory
                 entries =  list(os.path.join(path, f)
                                 for f in os.listdir(path)
-                                if f.endswith('.nc') or f.endswith('_nc')
+                                if self.has_volume_data(f)
                                 if not f.startswith('analysis_')
                                 if not f.startswith('fiducial')
                                 if not f.startswith('experiment')
@@ -419,8 +419,9 @@ class Updater(Connection):
         Checks the file name <path> to see if it indicates a file or
         directory with NetCDF volume data.
         """
-        return path.endswith(".nc") or path.endswith("_nc")
-    
+        return (path.endswith(".nc") or path.endswith("_nc") or
+                path.endswith(".nc.bz2") or path.endswith("_nc.bz2"))
+
     def is_sample_dir(self, path):
         """
         Checks the directory name <path> to see if the specified
