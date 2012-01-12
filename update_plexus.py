@@ -24,6 +24,7 @@ from file_cache import FileCache
 from logger import *
 from nc3header import NC3HeaderInfo, NC3File, NC3Error
 from history import History
+from make_slices import Slicer
 from simple_upload import Connection
 
 
@@ -211,6 +212,45 @@ class Updater(Connection):
         
         return status, output
 
+    def update_slices(self, path, project = None, sample = None,
+                      info = None, timestring = None):
+        """
+        Creates and uploads slice images for a single NetCDF data set at
+        location <path>. If <project> and <sample> are not specified,
+        they are extracted from the absolute path. Additional information
+        is passed in <info> and <timestring>.
+        
+        The response received from Plexus is written to self.output.
+        """
+
+        if not (info.get('IdExt') or info.get('IdInt')):
+            return
+
+        seen = info['Images']
+
+        if self.dry_run:
+            slicer = Slicer(path, seen, self.replace, true)
+            for (data, name, action) in slicer.slices:
+                self.print_action(project, sample, os.path.dirname(path),
+                                  name, action)
+        else:
+            history = History(path, path, time.gmtime(os.path.getmtime(path)))
+            main = history.main_process().record
+            meta = dict((k, main[k]) for k in ["data_file",
+                                               "data_type",
+                                               "date",
+                                               "domain",
+                                               "identifier",
+                                               "name",
+                                               "predecessors",
+                                               "process",
+                                               "run_by"])
+
+            slicer = Slicer(path, seen, self.replace, self.mock_slices, meta)
+            for (data, name, action) in slicer.slices:
+                self.upload_files(project, sample, timestring,
+                                  ((data, name),), info)
+
     def update_item(self, path, project = None, sample = None, seen = None):
         """
         Uploads the data for a single NetCDF data set at location
@@ -293,21 +333,9 @@ class Updater(Connection):
             self.log.writeln(str(seen[name]))
 
             # -- extract and upload the slices if appropriate
-            node_info = seen[name]
-            if self.make_slices and (node_info.get('IdExt') or node_info.get('IdInt')):
-                from make_slices import Slicer
-                
-                slices = Slicer(path, seen[name]['Images'], self.replace,
-                                self.dry_run or self.mock_slices,
-                                { "slice-node": node_info['IdInt'] }).slices
-                if self.dry_run:
-                    for (data, name, action) in slices:
-                        self.print_action(project, sample, location,
-                                          name, action)
-                else:
-                    for (data, name, action) in slices:
-                        self.upload_files(project, sample, t,
-                                          ((data, name),), node_info)
+            if self.make_slices:
+                self.update_slices(path, project, sample, seen[name], t)
+
         except KeyboardInterrupt, ex:
             raise ex
         except:
