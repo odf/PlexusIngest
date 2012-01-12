@@ -513,7 +513,9 @@ class Slicer:
 
 if __name__ == "__main__":
     Logger().priority = LOGGER_INFO
-    for (data, name, action) in Slicer(sys.argv[1]).slices:
+    source = sys.argv[1]
+    slicer = Slicer(source, info = { 'source': source })
+    for (data, name, action) in slicer.slices:
         fp = file(name, 'wb')
         fp.write(data)
         fp.close()
