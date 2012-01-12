@@ -296,16 +296,17 @@ class Slice:
             if z_pos == self.pos:
                 self.content[:, :] = z_slice[:, :]
 
-    def make_name(self, basename):
+    def make_name(self, basename, thumb_size = None):
         """
         Creates a name for this slice from its axis and location and
         the string <basename>.
         """
         
-        return "slice%c%d_%s.png" % (self.axis.upper(),
-                                     self.pos + self.offset, basename)
+        suffix = "" if thumb_size is None else "_%sx%s" % thumb_size
+        return "slice%c%d_%s%s.png" % (self.axis.upper(),
+                                       self.pos + self.offset, basename, suffix)
 
-    def image_data(self, lo, hi, mask_val):
+    def image_data(self, lo, hi, mask_val, thumb_size = None):
         """
         Converts this slice into an image and returns it as a PNG
         encoded string. The values <lo> and <hi> specify the range of
@@ -333,7 +334,7 @@ class Slice:
     
         # -- generate and return the data
         return make_image.make_image(content, lo, hi, mask_val, img_mode,
-                                     self.info)
+                                     thumb_size, self.info)
 
 
 class Slicer:
@@ -360,7 +361,11 @@ class Slicer:
     """
 
     def __init__(self, path,
-                 existing = [], replace = False, dry_run = False, info = {}):
+                 existing = [],
+                 replace = False,
+                 dry_run = False,
+                 sizes = (None,),
+                 info = {}):
         self.path      = re.sub("/$", "", path)
         self.name      = re.sub("[._]nc$", "", os.path.basename(self.path))
         self.slicename = re.sub("^tomo", "tom",
@@ -368,6 +373,7 @@ class Slicer:
         self.existing  = existing
         self.replace   = replace
         self.dry_run   = dry_run
+        self.sizes     = sizes
         self.info      = info
         
         self.img_mode  = None
@@ -456,9 +462,9 @@ class Slicer:
             return
         elif self.dry_run:
             name = self.slicename
-            out = tuple((make_image.make_dummy(s.make_name(name)),
-                         s.make_name(name), s.action) 
-                        for s in slices)
+            out = tuple((make_image.make_dummy(s.make_name(name), 256, 256, sz),
+                         s.make_name(name, sz), s.action)
+                        for s in slices for sz in self.sizes)
             self._slices = out
             return
 
@@ -492,9 +498,9 @@ class Slicer:
         
         # -- encode slices as PNG images
         self.log.writeln("Making the images...")
-        self._slices = tuple((s.image_data(lo, hi, mask_value),
-                              s.make_name(self.slicename), s.action)
-                             for s in slices)
+        self._slices = tuple((s.image_data(lo, hi, mask_value, sz),
+                              s.make_name(self.slicename, sz), s.action)
+                             for s in slices for sz in self.sizes)
         
         # -- report success
         self.log.writeln("Slice image generation finished.")

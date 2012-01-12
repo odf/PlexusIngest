@@ -246,7 +246,8 @@ class Updater(Connection):
                                                "process",
                                                "run_by"])
 
-            slicer = Slicer(path, seen, self.replace, self.mock_slices, meta)
+            slicer = Slicer(path, seen, self.replace, self.mock_slices,
+                            sizes = (None, (80,80), (120,120)), info = meta)
             for (data, name, action) in slicer.slices:
                 self.upload_files(project, sample, timestring,
                                   ((data, name),), info)
