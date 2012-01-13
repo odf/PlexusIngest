@@ -302,9 +302,9 @@ class Slice:
         the string <basename>.
         """
         
-        suffix = "" if thumb_size is None else "_%sx%s" % thumb_size
-        return "slice%c%d_%s%s.png" % (self.axis.upper(),
-                                       self.pos + self.offset, basename, suffix)
+        prefix = "" if thumb_size is None else "__%sx%s__" % thumb_size
+        return "%sslice%c%d_%s.png" % (prefix, self.axis.upper(),
+                                       self.pos + self.offset, basename)
 
     def image_data(self, lo, hi, mask_val, thumb_size = None):
         """
