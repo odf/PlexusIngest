@@ -37,24 +37,34 @@ class Updater(Connection):
     Mandatory constructor arguments are <user> and <password> for
     authentication with Plexus. Optional argument are
     
+        <plexus>      - the base URL for the Plexus web application.
         <manager>     - the manager for newly created projects,
-        <development> - if true, connects to localhost:<port>,
-        <port>        - the port to use locally (default: 3000).
         <interactive> - if True, asks for missing login and/or password
         <make_slices> - if True, creates slice images from volume data
         <replace>     - if True, replaces existing files
+        <dry_run>     - if True, only lists actions that would have been taken
+        <mock_slices> - if True, produces placeholder images for slices
         <output>      - object to send output to (default: sys.stdout)
     """
     
-    #MAX_ERRORS = 50
     MAX_ERRORS = 1000
     
-    def __init__(self,  user, password, manager = None,
-                 development = False, port = 3000, interactive = False,
-                 make_slices = True, replace = False, dry_run = False,
-                 mock_slices = False, output = sys.stdout):
-        Connection.__init__(self, user, password, manager = manager,
-                            development = development, port = port,
+    def __init__(self,
+                 user,
+                 password,
+                 plexus      = "https://plexus.anu.edu.au",
+                 manager     = None,          
+                 interactive = False,
+                 make_slices = True,
+                 replace     = False,
+                 dry_run     = False,
+                 mock_slices = False,
+                 output      = sys.stdout):
+        Connection.__init__(self,
+                            user,
+                            password,
+                            server      = plexus,
+                            manager     = manager,
                             interactive = interactive)
         self.log         = Logger()
         self.make_slices = make_slices
@@ -544,11 +554,9 @@ def parse_options():
     parser.add_option("-x", "--exclude-pictures", dest = "make_slices",
                       default = True, action = "store_false",
                       help = "skip slice picture creation")
-    parser.add_option("-P", "--production", dest = "development",
-                      default = True, action = "store_false",
-                      help= "update the production database")
-    parser.add_option("", "--port", dest = "port", default = 3000, type = "int",
-                      help = "the port to use if in development mode")
+    parser.add_option("-P", "--plexus", dest = "plexus", metavar = "URL",
+                      default = "https://plexus.anu.edu.au",
+                      help = "the base URL for the Plexus web application")
     parser.add_option("-m", "--manager", dest = "manager", metavar = "NAME",
                       help = "the manager of any new project entries")
     parser.add_option("-n", "--dry-run", dest = "dry_run", default = False,
@@ -632,20 +640,11 @@ def run():
     # -- parse options
     (options, args) = parse_options()
     
-    # -- if no manager for new projects is specified, use a default value
-    manager = options.manager
-    if manager is None:
-        if options.development:
-            manager = "olaf"
-        else:
-            manager = "aps110"
-    
     # -- create an appropriate connection object
     updater = Updater(user        = options.user,
                       password    = options.password,
-                      manager     = manager,
-                      development = options.development,
-                      port        = options.port,
+                      plexus      = options.plexus,
+                      manager     = options.manager,
                       interactive = True,
                       make_slices = options.make_slices,
                       replace     = options.force,
@@ -660,13 +659,9 @@ def run():
         updater.retry_wait = options.retry_wait
     
     # -- process cache options
-    if options.cache_location is not None:
-        FileCache.cache_location = options.cache_location
-    elif not options.development:
-        FileCache.cache_location = "/local/projects/d59/assets/nc3cache.db"
-
-    FileCache.cache_root = options.cache_root
-    FileCache.force_cache = options.force_cache
+    FileCache.cache_location = options.cache_location
+    FileCache.cache_root     = options.cache_root
+    FileCache.force_cache    = options.force_cache
     
     # -- process age limits
     updater.min_age = parse_age(options.min_age)
@@ -681,9 +676,8 @@ def run():
     
     # -- log end time and print some statistics
     updater.log.writeln("Scan finished at %s" % time.ctime())
-    updater.log.writeln("Read new headers from %d files."
-                        % FileCache.file_count)
-            
+    updater.log.writeln("Read new headers from %d files." % FileCache.file_count)
+ 
     # -- flush any output from the updater object
     updater.close()
 

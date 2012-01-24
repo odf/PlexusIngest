@@ -3,6 +3,8 @@
 """
 Simple script to upload data to Plexus.
 
+-- TODO: method names and synopsis has changed
+
 Uploads a collection of files to a specified sample. This can be called
 either from the commandline or via the pattern
 
@@ -62,35 +64,30 @@ class Connection:
     Mandatory constructor arguments are <user> and <password> for
     authentication with Plexus. Optional argument are
     
+        <server>      - the base URL for the Plexus web application
         <manager>     - the manager for newly created projects,
-        <development> - if true, connect to localhost:<port>,
-        <port>        - the port to use locally (default = 3000).
         <interactive> - if True, asks for missing login and/or password
     """
     
-    def __init__(self, user, password, manager = None,
-                 development = False, port = 3000, interactive = False):
+    def __init__(self,
+                 user,
+                 password,
+                 server      = "https://plexus.anu.edu.au",
+                 manager     = None,
+                 interactive = False):
         # -- if interactive, ask for authentication data with the service
         if interactive:
             import getpass
             while user in (None, ""):
-                user = raw_input("Plexus login: ")
+                user = raw_input("Server login: ")
             while password in (None, ""):
-                password = getpass.getpass("Plexus password: ")
+                password = getpass.getpass("Server password: ")
 
         # -- copy data to instance attributes
         self.user     = user
         self.password = password
-        self.port     = port
+        self.server   = server
         self.manager  = manager or ""
-
-        # -- determine which host to connect to and whether to use https
-        if development:
-            self.host  = "localhost:%s" % self.port
-            self.https = False
-        else:
-            self.host  = "plexus.anu.edu.au"
-            self.https = True
             
         # -- set default retry parameters
         self.retry_limit = 10  # number of upload attempts
@@ -101,9 +98,9 @@ class Connection:
     def post_form(self, selector, fields, files):
         """
         Composes an multipart/form-data message, posts it to the URL on
-        the host given by the relative path <selector> and returns a
+        the server given by the relative path <selector> and returns a
         tuple consisting of the HTTP status, reason and response text
-        as received from the host.
+        as received from the server.
         
         Normal fields are specified as a sequence <fields> of
         (name, value) pairs. Attached file data is specified as a
@@ -120,10 +117,10 @@ class Connection:
         count = 0
         while True:
             try:
-                if self.https:
-                    h = httplib.HTTPSConnection(self.host)
+                if self.server.startswith("https://"):
+                    h = httplib.HTTPSConnection(self.server)
                 else:
-                    h = httplib.HTTPConnection(self.host)
+                    h = httplib.HTTPConnection(self.server)
                 h.request('POST', selector, body, headers)
                 res = h.getresponse()
                 return res.status, res.reason, res.read()
@@ -235,11 +232,9 @@ def parse_options():
                       help = "login name for Plexus")
     parser.add_option("-p", "--password", dest = "password", metavar = "TEXT",
                       help = "password for Plexus")
-    parser.add_option("-P", "--production", dest = "development",
-                      default = True, action = "store_false",
-                      help= "update the production database")
-    parser.add_option("", "--port", dest = "port", default = 3000, type = "int",
-                      help = "the port to use if in development mode")
+    parser.add_option("-P", "--plexus", dest = "plexus", metavar = "URL",
+                      default = "https://plexus.anu.edu.au",
+                      help = "the base URL for the Plexus web application")
     parser.add_option("-m", "--manager", dest = "manager", metavar = "NAME",
                       help = "the manager of any new project entries")
     parser.add_option("-q", "--quiet", dest = "verbose",
@@ -263,42 +258,35 @@ def contents(path):
     return data
 
 
-def run():
-    """
-    Implements the command line interface. Program arguments and
-    options are passed via sys.argv. For usage details, call with '-h'
-    or refer to the parse_options() methods.
-    """
+# -- TODO rewrite this using post_import etc
 
-    # -- parse options
-    (options, args) = parse_options()
+# def run():
+#     """
+#     Implements the command line interface. Program arguments and
+#     options are passed via sys.argv. For usage details, call with '-h'
+#     or refer to the parse_options() methods.
+#     """
+
+#     # -- parse options
+#     (options, args) = parse_options()
     
-    # -- if no manager for new projects is specified, use a default value
-    manager = options.manager
-    if manager is None:
-        if options.development:
-            manager = "olaf"
-        else:
-            manager = "aps110"
-    
-    # -- create an appropriate connection object
-    connection = Connection(options.user, options.password, manager,
-                            development = options.development,
-                            port = options.port,
-                            interactive = True)
+#     # -- create an appropriate connection object
+#     connection = Connection(user             = options.user,
+#                             password         = options.password,
+#                             options.manager  = options.manager,
+#                             interactive      = True)
 
-    #TODO rewrite this using post_import etc
-    # -- collect and convert arguments for the post_update() call
-    project = args[0]
-    sample = args[1]
-    files = ((contents(name), name) for name in args[2:])
-    mtime = ''
-    if len(args) > 2:
-        mtime = time.asctime(time.localtime(os.path.getmtime(args[2])))
+#     # -- collect and convert arguments for the post_update() call
+#     project = args[0]
+#     sample = args[1]
+#     files = ((contents(name), name) for name in args[2:])
+#     mtime = ''
+#     if len(args) > 2:
+#         mtime = time.asctime(time.localtime(os.path.getmtime(args[2])))
 
-    # -- post the request and print the result page
-    print connection.post_update(project, sample, mtime, files, False)[2]
+#     # -- post the request and print the result page
+#     print connection.post_update(project, sample, mtime, files, False)[2]
 
 
-if __name__ == "__main__":
-    run()
+# if __name__ == "__main__":
+#     run()
