@@ -302,7 +302,10 @@ class Slice:
         the string <basename>.
         """
         
-        prefix = "" if thumb_size is None else "__%sx%s__" % thumb_size
+        if thumb_size is None:
+            prefix = ""
+        else:
+            prefix = "__%sx%s__" % thumb_size
         return "%sslice%c%d_%s.png" % (prefix, self.axis.upper(),
                                        self.pos + self.offset, basename)
 
