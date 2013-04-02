@@ -17,7 +17,7 @@ where 'attachments' is a sequence of (content, name) pairs.
 (Requires Python 2.4 or higher.)
 """
 
-import httplib, mimetypes, os, os.path, time
+import httplib, mimetypes, os, os.path, re, time
 
 from logger import Logger, LOGGER_ERROR
 
@@ -118,9 +118,14 @@ class Connection:
         while True:
             try:
                 if self.server.startswith("https://"):
-                    h = httplib.HTTPSConnection(self.server)
+                    host = re.sub('^https:\/\/', '', self.server)
+                    self.log.writeln("Connecting to %s using https" % host)
+                    h = httplib.HTTPSConnection(host)
                 else:
-                    h = httplib.HTTPConnection(self.server)
+                    host = re.sub('^http:\/\/', '', self.server)
+                    self.log.writeln("Connecting to %s using http" % host)
+                    h = httplib.HTTPConnection(host)
+                        
                 h.request('POST', selector, body, headers)
                 res = h.getresponse()
                 return res.status, res.reason, res.read()
