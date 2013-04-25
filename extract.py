@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Convenience script - extracts Plexus import file and slice images from NetCDF
 #
 # (c)2010 ANUSF
