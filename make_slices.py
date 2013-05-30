@@ -118,7 +118,8 @@ class VolumeVariable:
         (self.dtype, self.big_endian_type) = {
           'b': (numpy.uint8,  numpy.dtype(">u1")),
           'h': (numpy.uint16, numpy.dtype(">u2")),
-          'i': (numpy.int32,  numpy.dtype(">i4")) }[var.python_type_code]
+          'i': (numpy.int32,  numpy.dtype(">i4")),
+          'f': (numpy.float32, numpy.dtype(">f4")) }[var.python_type_code]
 
     def __eq__(self, other):
         return (self.name == other.name and self.size == other.size and
@@ -196,7 +197,7 @@ def find_variable(path):
     # -- loop through all the variables in the file
     for v in file.variables:
         if (len(v.dimensions) == 3 and v.dimensions[0].value > 1 and
-            v.python_type_code in 'bhi'
+            v.python_type_code in 'bhif'
             ):
             var = VolumeVariable(file, v)
             break
@@ -213,7 +214,7 @@ class Histogram:
     ignored.
     """
     
-    def __init__(self, mask_value = 0):
+    def __init__(self, mask_value = 0, minval = None, maxval = None):
         # -- save the mask value
         self.mask_value = mask_value
         # -- initialize the frequency count
@@ -222,6 +223,13 @@ class Histogram:
         self.total = 0
         self.masked = 0
 
+        if maxval is not None:
+            self.offset = minval
+            self.binsize = (maxval - minval) * (1.0 - 1.0e-12) / 0x10000;
+        else:
+            self.offset = 0
+            self.binsize = 1
+
     def update(self, slice):
         """
         Updates the frequency count with the data from the numpy array
@@ -229,7 +237,8 @@ class Histogram:
         """
         
         # -- process the new data
-        flat = slice.flatten()
+        tmp = (slice.flatten() - self.offset) / self.binsize
+        flat = numpy.array(tmp, dtype = 'uint16')
         mask = (flat == self.mask_value) | (flat < 0) | (flat > 0xffff)
         new_masked = flat[mask].size
         new_counts = numpy.bincount(numpy.where(mask, 0, flat))
@@ -256,7 +265,7 @@ class Histogram:
         for i in xrange(self.counts.size):
             count += int(self.counts[i])
             if count >= threshold:
-                return i
+                return self.offset + i * self.binsize
         
     def top_percentile(self, p):
         """
@@ -268,7 +277,7 @@ class Histogram:
         for i in xrange(self.counts.size-1, -1, -1):
             count += int(self.counts[i])
             if count >= threshold:
-                return i
+                return self.offset + i * self.binsize
 
 
 class Slice:
@@ -332,12 +341,34 @@ class Slice:
             img_mode = make_image.GRAYSCALE
         elif content.dtype == numpy.int32:
             img_mode = make_image.COLOR_CODED
+        elif content.dtype == numpy.float32:
+            img_mode = make_image.GRAYSCALE
         else:
-            raise "unexpected array type: %s" % content.dtype
+            raise Exception("unexpected array type: %s" % content.dtype)
     
         # -- generate and return the data
         return make_image.make_image(content, lo, hi, mask_val, img_mode,
                                      thumb_size, self.info)
+
+
+def data_range(var, entries, log):
+    minval = maxval = None
+
+    for filename in entries:
+        log.writeln("Preprocessing %s..." % os.path.basename(filename))
+        for tmp in var.z_slices(filename):
+            z, data = tmp[:2]
+            if data is None:
+                log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
+            else:
+                lo = numpy.min(data)
+                hi = numpy.max(data)
+                if minval is None or lo < minval:
+                    minval = lo
+                if maxval is None or hi > maxval:
+                    maxval = hi
+
+    return (minval, maxval)
 
 
 class Slicer:
@@ -456,7 +487,8 @@ class Slicer:
         # -- determine the appropriate mask value
         mask_value = { numpy.uint8:  0xff,
                        numpy.uint16: 0xffff,
-                       numpy.int32:  0x7fffffff }[var.dtype]
+                       numpy.int32:  0x7fffffff,
+                       numpy.float32: 1.0e30 }[var.dtype]
 
         # -- initialize the slice set to be created
         slices = self.default_slice_set(var, 10)
@@ -475,7 +507,11 @@ class Slicer:
         buffer = numpy.zeros((var.size.y, var.size.x), var.dtype)
 
         # -- initialize the histogram
-        hist = Histogram(mask_value)
+        if var.dtype == numpy.float32:
+            (minval, maxval) = data_range(var, entries, self.log)
+            hist = Histogram(mask_value, minval, maxval)
+        else:
+            hist = Histogram(mask_value)
 
         # -- loop through files and copy data into slice arrays
         for filename in entries:
