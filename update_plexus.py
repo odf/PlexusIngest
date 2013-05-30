@@ -16,7 +16,7 @@ This can be called either from the commandline or via the pattern
 (Requires Python 2.4 or higher.)
 """
 
-import math, os, os.path, sys, time, traceback, yaml
+import math, os, os.path, sys, time, traceback
 
 import simplejson as json
 
@@ -199,8 +199,7 @@ class Updater(Connection):
         bad = False
         if status == 200:
             output = json.loads(response)
-            self.output.write(yaml.dump(output, default_flow_style = False,
-                                        explicit_start = True))
+            self.output.write(json.dumps(output, indent = 4) + "\n")
             status = output['Status']
             if status in ["Error", "Failure"]:
                 bad = True
