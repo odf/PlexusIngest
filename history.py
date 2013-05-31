@@ -2,7 +2,7 @@
 
 import os.path, re, time
 
-import simplejson as json
+import json
 
 from logger import *
 from nc3header import NC3File, NC3HeaderInfo

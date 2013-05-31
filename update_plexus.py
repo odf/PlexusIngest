@@ -18,7 +18,7 @@ This can be called either from the commandline or via the pattern
 
 import math, os, os.path, sys, time, traceback, yaml
 
-import simplejson as json
+import json
 
 from file_cache import FileCache
 from logger import *
