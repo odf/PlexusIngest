@@ -477,7 +477,7 @@ class Slicer:
         
         # -- find a useable volume variable and analyse it
         filename = entries[0]
-        self.log.writeln("Looking for a volume variable in %s..." %
+        self.log.writeln("Slicer: looking for a volume variable in %s..." %
                          os.path.basename(filename))
         var = find_variable(filename)
         if var is None :

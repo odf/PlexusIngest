@@ -628,7 +628,7 @@ class History:
         # -- try to find a process with the same name as the source file
         if self.name:
             name = Patterns.stripped_name(self.name)
-            self.logger.info("Stripped name: " + name)
+            self.logger.trace("Stripped name: " + name)
             main = self.process_by_name(name)
             if main: return main
         else:
