@@ -16,7 +16,7 @@ This can be called either from the commandline or via the pattern
 (Requires Python 2.4 or higher.)
 """
 
-import math, os, os.path, sys, time, traceback
+import math, os, os.path, re, sys, time, traceback
 
 import json
 
@@ -26,6 +26,9 @@ from nc3header import NC3HeaderInfo, NC3File, NC3Error
 from history import History
 from make_slices import Slicer
 from simple_upload import Connection
+
+
+SLICE_SIZES = (None, (80, 80), (120, 120))
 
 
 class Updater(Connection):
@@ -220,6 +223,20 @@ class Updater(Connection):
         
         return status, output
 
+    def slices_missing(self, seen, sizes_wanted):
+        patterns = list(re.sub(r'(.*slice[XYZ]).*', r'\1', name)
+                        for name in seen)
+        for size in sizes_wanted:
+            for axis in 'XYZ':
+                if size is None:
+                    name = "slice%s" % (axis,)
+                else:
+                    (u, v) = size
+                    name = "__%sx%s__slice%s" % (u, v, axis)
+                if not name in patterns:
+                    return True
+        return False
+
     def update_slices(self, path, project = None, sample = None,
                       info = None, timestring = None):
         """
@@ -236,29 +253,33 @@ class Updater(Connection):
 
         seen = info['Images']
 
-        if self.dry_run:
-            slicer = Slicer(path, seen, self.replace, true)
-            for (data, name, action) in slicer.slices:
-                self.print_action(project, sample, os.path.dirname(path),
-                                  name, action)
-        else:
-            history = History(path, path, time.gmtime(os.path.getmtime(path)))
-            main = history.main_process().record
-            meta = dict((k, main[k]) for k in ["data_file",
-                                               "data_type",
-                                               "date",
-                                               "domain",
-                                               "identifier",
-                                               "name",
-                                               "predecessors",
-                                               "process",
-                                               "run_by"])
+        if self.slices_missing(seen, SLICE_SIZES):
+            if self.dry_run:
+                slicer = Slicer(path, seen, self.replace, true)
+                for (data, name, action) in slicer.slices:
+                    self.print_action(project, sample, os.path.dirname(path),
+                                      name, action)
+            else:
+                history = History(path, path,
+                                  time.gmtime(os.path.getmtime(path)))
+                main = history.main_process().record
+                meta = dict((k, main[k]) for k in ["data_file",
+                                                   "data_type",
+                                                   "date",
+                                                   "domain",
+                                                   "identifier",
+                                                   "name",
+                                                   "predecessors",
+                                                   "process",
+                                                   "run_by"])
 
-            slicer = Slicer(path, seen, self.replace, self.mock_slices,
-                            sizes = (None, (80,80), (120,120)), info = meta)
-            for (data, name, action) in slicer.slices:
-                self.upload_files(project, sample, timestring,
-                                  ((data, name),), info)
+                slicer = Slicer(path, seen, self.replace, self.mock_slices,
+                                sizes = SLICE_SIZES, info = meta)
+                for (data, name, action) in slicer.slices:
+                    self.upload_files(project, sample, timestring,
+                                      ((data, name),), info)
+        else:
+            self.log.info("Slices look complete. Skipped slice generation.")
 
     def update_item(self, path, project = None, sample = None, seen = None):
         """
