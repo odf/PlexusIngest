@@ -5,7 +5,7 @@ import os.path, re, time
 import json
 
 from logger import *
-from nc3header import NC3File, NC3HeaderInfo
+from nc3header import NC3File, nc3file_from_directory
 
 
 TYPE2PREFIX = {
@@ -510,7 +510,7 @@ class History:
             attributes = self.extract_attributes(source)
             fingerprint = source.fingerprint
         elif isinstance(source, str):
-            nc3file = NC3File(NC3HeaderInfo(source).header_path)
+            nc3file = nc3file_from_directory(source)
             attributes = self.extract_attributes(nc3file)
             fingerprint = nc3file.fingerprint
             nc3file.close()

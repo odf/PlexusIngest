@@ -366,6 +366,30 @@ class NC3File:
         pass
 
 
+def nc3file_from_directory(path):
+    # --- normalize the path name
+    if path.endswith('/'):
+        path = path[:-1]
+    
+    # -- determine the base name for the header file
+    name = basenameNetCDF(os.path.basename(path))
+        
+    # -- collect the files under the given path
+    if os.path.isdir(path):
+        entries = list(os.path.join(root, f)
+                       for (root, dirs, files) in os.walk(path)
+                       for f in files
+                       if looksLikeNetCDF(f))
+        entries.sort()
+    else:
+        entries = [ path ]
+    if not entries:
+        raise NC3Error(path, "No NetCDF files found.")
+        
+    # -- open the first file and return the object
+    return NC3File(entries[0], name)
+
+
 class NC3HeaderInfo:
     """
     Given a file system location <path>, extracts header data for the

@@ -78,7 +78,6 @@ class Updater(Connection):
         
         self.error_count = 0
         self.last_project = self.last_sample = self.last_path = None
-        self.header_sizes = []
 
     def log_error(self, text):
         """
@@ -329,8 +328,6 @@ class Updater(Connection):
             t = time.strftime("%Y/%m/%d %H:%M:%S UTC", time.gmtime(mtime))
             seen.setdefault(name, { 'Images': [] })
             if action != "SKIP":
-                info = NC3HeaderInfo(path)
-                self.header_sizes.append(info.size)
                 if self.dry_run:
                     self.print_action(project, sample, location, name, action)
                 else:
