@@ -66,10 +66,10 @@ class FileCache:
             if (data["mtime"] == self.stat.st_mtime and
                 data["size"] == self.stat.st_size
                 ):
-                self.log.writeln("Using cached data.")
+                self.log.trace("Using cached data.")
                 self.buffer = data["buffer"]
             else:
-                self.log.writeln("Cached data is stale.")
+                self.log.trace("Cached data is stale.")
         
     @classmethod
     def __cache(cls):
@@ -134,7 +134,7 @@ class FileCache:
             n = (n + k - 1) / k * k
         
         # -- fill the buffer, but don't keep the file open
-        self.log.writeln("Reading first %d bytes from file..." % n)
+        self.log.trace("Reading first %d bytes from file..." % n)
         if self.path.endswith('.bz2'):
             self.bz2_read(n)
         else:

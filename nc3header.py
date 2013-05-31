@@ -215,7 +215,7 @@ class NC3File:
             self.file.close()
         
         # -- more logging
-        self.log.writeln("Header size is %d." % self.header_size)
+        self.log.trace("Header size is %d." % self.header_size)
         self.log.leave()
         
     def parse_header(self):
