@@ -272,6 +272,7 @@ class Updater(Connection):
                                                    "predecessors",
                                                    "process",
                                                    "run_by"])
+                meta['path'] = os.path.abspath(path)
 
                 slicer = Slicer(path, seen, self.replace, self.mock_slices,
                                 sizes = SLICE_SIZES, info = meta)
