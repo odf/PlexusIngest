@@ -1,24 +1,3 @@
-# PlexusIngest
-
-Author: Olaf Delgado-Friedrichs
-
-Python code for uploading metadata and slice images to a Plexus web server.
-
-
-## Getting Started
-
-You need upload access to a Plexus (https://github.com/odf/PlexusRails)
-instance and Python 2.6 or higher with numpy and the Python Image Library
-(PIL). PIL must be configured and installed with the ability to create .png
-images.
-
-The main executable is update_plexus.py. The command './updata_plexus.py -h'
-lists command line options. A data directory hierarchy of the form
-repository/project/sample/dataset or a suffix thereof is assumed.
-
-
-## Copyright
-
 Copyright (c) 2007-2013 The Australian National University
 
 Permission is hereby granted, free of charge, to any person obtaining
