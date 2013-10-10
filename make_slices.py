@@ -18,7 +18,7 @@ Typical usage:
         fp.close()
         
 
-(Requires Python 2.4 or higher.)
+(Requires Python 2.6 or higher.)
 """
 
 import os, os.path, re, struct, sys
@@ -28,50 +28,6 @@ import bz2
 from logger import Logger, LOGGER_INFO, LOGGER_WARNING
 import make_image
 from nc3header import NC3File
-
-
-class Vec3:
-    """
-    Tiny ad-hoc class for three-dimensional vectors. Supports the four
-    basic arithmetic operators and propagation of scalars.
-    """
-    
-    def __init__(self, a):
-        if isinstance(a, Vec3):
-            (x, y, z) = (a.x, a.y, a.z)
-        elif type(a) in (int, float):
-            (x, y, z) = (a, a, a)
-        else:
-            (x, y, z) = a
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def __add__(self, other):
-        other = Vec3(other)
-        return Vec3((self.x + other.x, self.y + other.y, self.z + other.z))
-    __radd__ = __add__
-
-    def __sub__(self, other):
-        other = Vec3(other)
-        return Vec3((self.x - other.x, self.y - other.y, self.z - other.z))
-
-    def __rsub__(self, other):
-        other = Vec3(other)
-        return Vec3((other.x - self.x, other.y - self.y, other.z - self.z))
-
-    def __mul__(self, a):
-        return Vec3((self.x * a, self.y * a, self.z * a))
-    __rmul__ = __mul__
-
-    def __div__(self, a):
-        return Vec3((self.x / a, self.y / a, self.z / a))
-    
-    def __eq__(self, a):
-        return self.x == a.x and self.y == a.y and self.z == a.z
-    
-    def __ne__(self, a):
-        return not self.__eq__(a)
 
 
 def get_attribute(file, var, name):
@@ -105,14 +61,13 @@ class VolumeVariable:
         
         # -- extract the variable's shape
         dims = var.dimensions
-        self.size = Vec3((dims[2].value, dims[1].value, dims[0].value))
+        self.size = (dims[2].value, dims[1].value, dims[0].value)
         zdim_total = get_attribute(file, var, 'zdim_total')
-        if zdim_total is not None: self.size.z = zdim_total[0]
+        if zdim_total is not None: self.size[2] = zdim_total[0]
 
         # -- determine the origin
         origin = get_attribute(file, var, 'coordinate_origin_xyz')
-        if origin is None: origin = 0
-        self.origin = Vec3(origin)
+        self.origin = origin or (0, 0, 0)
 
         # -- determine the data type
         (self.dtype, self.big_endian_type) = {
@@ -155,11 +110,11 @@ class VolumeVariable:
             raise RuntimeError("variable mismatch between files")
         z_range = get_attribute(file, var, 'zdim_range')
         if z_range is None:
-            z_range = range(0, self.size.z)
+            z_range = range(0, self.size[2])
         else:
             z_range = range(z_range[0], z_range[1] + 1)
             
-        bytes_per_slice = self.size.x * self.size.y * var.element_size
+        bytes_per_slice = self.size[0] * self.size[1] * var.element_size
         offset = var.data_start
         
         file.close()
@@ -175,7 +130,7 @@ class VolumeVariable:
                 yield (z, None, "insufficient data")
                 break
             data = numpy.fromstring(buffer, self.big_endian_type)
-            data.shape = (self.size.y, self.size.x)
+            data.shape = (self.size[1], self.size[0])
             yield (z, data)
         fp.close()
 
@@ -286,9 +241,9 @@ class Slice:
         self.pos    = pos
         self.offset = offset
         self.info   = info
-        self.slice_dims = {'x': (size.z, size.y),
-                           'y': (size.z, size.x),
-                           'z': (size.y, size.x) }[self.axis]         
+        self.slice_dims = {'x': (size[2], size[1]),
+                           'y': (size[2], size[0]),
+                           'z': (size[1], size[0]) }[self.axis]
         self.content = numpy.zeros(self.slice_dims, type)
     
     def update(self, z_slice, z_pos):
@@ -440,18 +395,18 @@ class Slicer:
         the slice in both directions would be at least <delta>.
         """
         
-        pos = (var.size - 1) / 2
+        pos = list((x - 1) / 2 for x in var.size)
         size = var.size
         dtype = var.dtype
         origin = var.origin
         
         slices = []
-        if size.y > delta and size.z > delta:
-            self.add_slice(slices, size, dtype, 'x', pos.x, origin.x)
-        if size.x > delta and size.z > delta:
-            self.add_slice(slices, size, dtype, 'y', pos.y, origin.y)
-        if size.x > delta and size.y > delta:
-            self.add_slice(slices, size, dtype, 'z', pos.z, origin.z)
+        if size[1] > delta and size[2] > delta:
+            self.add_slice(slices, size, dtype, 'x', pos[0], origin[0])
+        if size[0] > delta and size[2] > delta:
+            self.add_slice(slices, size, dtype, 'y', pos[1], origin[1])
+        if size[0] > delta and size[1] > delta:
+            self.add_slice(slices, size, dtype, 'z', pos[2], origin[2])
 
         return slices
         
@@ -504,7 +459,7 @@ class Slicer:
             return
 
         # -- set up an array to hold the current z slice
-        buffer = numpy.zeros((var.size.y, var.size.x), var.dtype)
+        buffer = numpy.zeros((var.size[1], var.size[0]), var.dtype)
 
         # -- initialize the histogram
         if var.dtype == numpy.float32:
