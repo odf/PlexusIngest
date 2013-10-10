@@ -22,18 +22,6 @@ except ImportError:
     def hexdigest(s): return md5.new(s).hexdigest()
 
 
-def looksLikeNetCDF(name):
-    if name.endswith(".bz2"):
-        name = name[:-4]
-    return name.endswith('_nc') or name.endswith('.nc')
-
-def basenameNetCDF(name):
-    if name.endswith(".bz2"):
-        name = name[:-4]
-    if name.endswith(".nc") or name.endswith("_nc"):
-        name = name[:-3]
-    return name
-
 class NC3Error(RuntimeError):
     """
     Class for errors thrown by the NetCDF parser.
@@ -322,49 +310,22 @@ class NC3File:
         
         self.log.leave()
         return variables
-    
-    @property
-    def merged_attributes(self):
-        result = {}
-        for attr in self.attributes:
-            result.setdefault(attr.name, attr.value)
-        for var in self.variables:
-            for attr in var.attributes:
-                result.setdefault(attr.name, attr.value)
-        return result
-    
-    @property
-    def header_as_cdl(self):
-        # -- write the first line
-        buffer = [ "netcdf %s {" % self.name ]
-        
-        # -- write the dimensions
-        buffer.append("dimensions:")
-        for dim in self.dimensions:
-            buffer.append("\t%s = %s ;" % (dim.name, dim.value))
-        
-        # -- write the variables
-        buffer.append("variables:")
-        for var in self.variables:
-            buffer.append("\t%s ;" % var)
-            for attr in var.attributes:
-                buffer.append("\t\t%s:%s ;" % (var.name, attr))
-                
-        # -- write the global attributes
-        buffer.append("")
-        buffer.append("// global attributes:")
-        for attr in self.attributes:
-            buffer.append("\t\t:%s ;" % attr)
-        
-        # -- write the final line
-        buffer.append("}")
-        
-        # -- return the joined result
-        return '\n'.join(buffer) + '\n'
 
     def close(self):
         pass
 
+
+def looksLikeNetCDF(name):
+    if name.endswith(".bz2"):
+        name = name[:-4]
+    return name.endswith('_nc') or name.endswith('.nc')
+
+def basenameNetCDF(name):
+    if name.endswith(".bz2"):
+        name = name[:-4]
+    if name.endswith(".nc") or name.endswith("_nc"):
+        name = name[:-3]
+    return name
 
 def nc3file_from_directory(path):
     # --- normalize the path name
@@ -390,51 +351,6 @@ def nc3file_from_directory(path):
     return NC3File(entries[0], name)
 
 
-class NC3HeaderInfo:
-    """
-    Given a file system location <path>, extracts header data for the
-    NetCDF file at that location.
-    
-    If the given location is a directory, its last path component is
-    used to determine the output file name and its alphabetically first
-    entry opened to extract header data.
-    
-    The following fields are available:
-      text     - the header as a printable text in CDL format
-      size     - the original header size in the NetCDF source file
-      filename - the suggested name of the file to write CDL output to
-    """
-    
-    def __init__(self, path):
-        # --- normalize the path name
-        if path.endswith('/'):
-            path = path[:-1]
-    
-        # -- determine the base name for the header file
-        name = basenameNetCDF(os.path.basename(path))
-        
-        # -- collect the files under the given path
-        if os.path.isdir(path):
-            entries = list(os.path.join(root, f)
-                           for (root, dirs, files) in os.walk(path)
-                           for f in files
-                           if looksLikeNetCDF(f))
-            entries.sort()
-        else:
-            entries = [ path ]
-        if not entries:
-            raise NC3Error(path, "No NetCDF files found.")
-        
-        # -- open the first file and extract the header
-        nc3file = NC3File(entries[0], name)
-        self.text = nc3file.header_as_cdl
-        self.size = nc3file.header_size
-        self.fingerprint = nc3file.fingerprint
-        self.header_path = nc3file.path
-        self.filename = "%s.cdf" % nc3file.name
-        nc3file.close()
-
-
 if __name__ == "__main__":
     import sys
     
@@ -445,7 +361,28 @@ if __name__ == "__main__":
         else:
             Logger().priority = LOGGER_INFO
         i += 1
-    info = NC3HeaderInfo(sys.argv[i])
-    fp = file(info.filename, 'wb')
-    fp.write(info.text)
+
+    nc3file = nc3file_from_directory(sys.argv[i])
+
+    buffer = [ "netcdf %s {" % nc3file.name ]
+
+    buffer.append("dimensions:")
+    for dim in nc3file.dimensions:
+        buffer.append("\t%s = %s ;" % (dim.name, dim.value))
+
+    buffer.append("variables:")
+    for var in nc3file.variables:
+        buffer.append("\t%s ;" % var)
+        for attr in var.attributes:
+            buffer.append("\t\t%s:%s ;" % (var.name, attr))
+
+    buffer.append("")
+    buffer.append("// global attributes:")
+    for attr in nc3file.attributes:
+        buffer.append("\t\t:%s ;" % attr)
+
+    buffer.append("}")
+
+    fp = file(("%s.cdf" % nc3file.name), 'wb')
+    fp.write('\n'.join(buffer) + '\n')
     fp.close()
