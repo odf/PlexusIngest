@@ -83,56 +83,57 @@ class VolumeVariable:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def z_slices(self, path):
-        """
-        A generator method that yields constant z slices corresponding
-        to this variable from the NetCDF file located at <path>.
-        
-        Each value produced is a pair containing the z coordinate of
-        the slice and a two-dimensional numpy array containing the
-        extracted data.
 
-        Usage example:
+def z_slices(var0, path):
+    """
+    A generator method that yields constant z slices corresponding
+    to the variable <var> from the NetCDF file located at <path>.
         
-            for (z, data) in var.z_slices(path):
-                ... # do something with data
-        """
+    Each value produced is a pair containing the z coordinate of
+    the slice and a two-dimensional numpy array containing the
+    extracted data.
+
+    Usage example:
         
-        file = NC3File(path)
+        for (z, data) in z_slices(var, path):
+            ... # do something with data
+    """
         
-        for var in file.variables:
-            if var.name == self.name:
-                break
-        else:
-            return
+    file = NC3File(path)
         
-        if VolumeVariable(file, var) != self:
-            raise RuntimeError("variable mismatch between files")
-        z_range = get_attribute(file, var, 'zdim_range')
-        if z_range is None:
-            z_range = range(0, self.size[2])
-        else:
-            z_range = range(z_range[0], z_range[1] + 1)
+    for var in file.variables:
+        if var.name == var0.name:
+            break
+    else:
+        return
+        
+    if VolumeVariable(file, var) != var0:
+        raise RuntimeError("variable mismatch between files")
+    z_range = get_attribute(file, var, 'zdim_range')
+    if z_range is None:
+        z_range = range(0, var0.size[2])
+    else:
+        z_range = range(z_range[0], z_range[1] + 1)
             
-        bytes_per_slice = self.size[0] * self.size[1] * var.element_size
-        offset = var.data_start
+    bytes_per_slice = var0.size[0] * var0.size[1] * var.element_size
+    offset = var.data_start
         
-        file.close()
-        
-        if path.endswith('.bz2'):
-            fp = bz2.BZ2File(path, 'r', 1024 * 1024)
-        else:
-            fp = open(path, "rb")
-        fp.seek(var.data_start)
-        for z in z_range:
-            buffer = fp.read(bytes_per_slice)
-            if len(buffer) < bytes_per_slice:
-                yield (z, None, "insufficient data")
-                break
-            data = numpy.fromstring(buffer, self.big_endian_type)
-            data.shape = (self.size[1], self.size[0])
-            yield (z, data)
-        fp.close()
+    file.close()
+
+    if path.endswith('.bz2'):
+        fp = bz2.BZ2File(path, 'r', 1024 * 1024)
+    else:
+        fp = open(path, "rb")
+    fp.seek(var.data_start)
+    for z in z_range:
+        buffer = fp.read(bytes_per_slice)
+        if len(buffer) < bytes_per_slice:
+            yield (z, None, "insufficient data")
+            break
+        data = numpy.fromstring(buffer, var0.big_endian_type)
+        data.shape = (var0.size[1], var0.size[0])
+        yield (z, data)
+    fp.close()
 
 
 def find_variable(path):
@@ -209,30 +210,31 @@ class Histogram:
         # -- update the count of masked and total non-negative entries
         self.masked += new_masked
         self.total  += new_masked + int(new_counts.sum())
-        
-    def bottom_percentile(self, p):
-        """
-        Returns the smallest number i such that at least <p> percent of
-        the non-masked entries counted so far have value i or less.
-        """
-        threshold = p * (self.total - self.masked) / 100.0
-        count = 0
-        for i in xrange(self.counts.size):
-            count += int(self.counts[i])
-            if count >= threshold:
-                return self.offset + i * self.binsize
-        
-    def top_percentile(self, p):
-        """
-        Returns the largest number i such that at least <p> percent of
-        the non-masked entries counted so far have value i or more.
-        """
-        threshold = p * (self.total - self.masked) / 100.0
-        count = 0
-        for i in xrange(self.counts.size-1, -1, -1):
-            count += int(self.counts[i])
-            if count >= threshold:
-                return self.offset + i * self.binsize
+
+
+def bottom_percentile(histogram, p):
+    """
+    Returns the smallest number i such that at least <p> percent of
+    the non-masked entries counted so far have value i or less.
+    """
+    threshold = p * (histogram.total - histogram.masked) / 100.0
+    count = 0
+    for i in xrange(histogram.counts.size):
+        count += int(histogram.counts[i])
+        if count >= threshold:
+            return histogram.offset + i * histogram.binsize
+
+def top_percentile(histogram, p):
+    """
+    Returns the largest number i such that at least <p> percent of
+    the non-masked entries counted so far have value i or more.
+    """
+    threshold = p * (histogram.total - histogram.masked) / 100.0
+    count = 0
+    for i in xrange(histogram.counts.size-1, -1, -1):
+        count += int(histogram.counts[i])
+        if count >= threshold:
+            return histogram.offset + i * histogram.binsize
 
 
 class Slice:
@@ -311,7 +313,7 @@ def data_range(var, entries, log):
 
     for filename in entries:
         log.writeln("Preprocessing %s..." % os.path.basename(filename))
-        for tmp in var.z_slices(filename):
+        for tmp in z_slices(var, filename):
             z, data = tmp[:2]
             if data is None:
                 log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
@@ -471,7 +473,7 @@ class Slicer:
         # -- loop through files and copy data into slice arrays
         for filename in entries:
             self.log.writeln("Processing %s..." % os.path.basename(filename))
-            for tmp in var.z_slices(filename):
+            for tmp in z_slices(var, filename):
                 z, data = tmp[:2]
                 if data is None:
                     self.log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
@@ -484,8 +486,8 @@ class Slicer:
         self.log.writeln("Analysing the histogram...")
         if self.name.startswith("tom"):
             # -- determine 0.1 and 99.9 percentile for contrast stretching
-            lo = hist.bottom_percentile(0.1)
-            hi = hist.top_percentile(0.1)
+            lo = bottom_percentile(hist, 0.1)
+            hi = top_percentile(hist, 0.1)
         else:
             lo = 0
             hi = hist.counts.size - 1
