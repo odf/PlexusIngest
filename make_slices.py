@@ -262,50 +262,50 @@ class Slice:
             if z_pos == self.pos:
                 self.content[:, :] = z_slice[:, :]
 
-    def make_name(self, basename, thumb_size = None):
-        """
-        Creates a name for this slice from its axis and location and
-        the string <basename>.
-        """
-        
-        if thumb_size is None:
-            prefix = ""
-        else:
-            prefix = "__%sx%s__" % thumb_size
-        return "%sslice%c%d_%s.png" % (prefix, self.axis.upper(),
-                                       self.pos + self.offset, basename)
 
-    def image_data(self, lo, hi, mask_val, thumb_size = None):
-        """
-        Converts this slice into an image and returns it as a PNG
-        encoded string. The values <lo> and <hi> specify the range of
-        relevant data. Entries equal to <mask_val> are treated as
-        masked.
-        
-        An appropriate encoding mode is determined from the data type
-        and value range. Details of the actual encoding are deferred to
-        the function 'make_image' in the package of the same name.
-        """
-        
-        # -- determine the encoding mode
-        content = self.content
-        if content.dtype == numpy.uint8:
-            if hi <= 1:
-                img_mode = make_image.BLACK_AND_WHITE
-            else:
-                img_mode = make_image.COLOR_CODED_FIXED
-        elif content.dtype == numpy.uint16:
-            img_mode = make_image.GRAYSCALE
-        elif content.dtype == numpy.int32:
-            img_mode = make_image.COLOR_CODED
-        elif content.dtype == numpy.float32:
-            img_mode = make_image.GRAYSCALE
+def make_name(slice, basename, thumb_size = None):
+    """
+    Creates a name for a slice from its axis and location and the string
+    <basename>.
+    """
+
+    if thumb_size is None:
+        prefix = ""
+    else:
+        prefix = "__%sx%s__" % thumb_size
+    return "%sslice%c%d_%s.png" % (prefix, slice.axis.upper(),
+                                   slice.pos + slice.offset, basename)
+
+def image_data(slice, lo, hi, mask_val, thumb_size = None):
+    """
+    Converts a slice into an image and returns it as a PNG encoded
+    string. The values <lo> and <hi> specify the range of relevant
+    data. Entries equal to <mask_val> are treated as masked.
+
+    An appropriate encoding mode is determined from the data type
+    and value range. Details of the actual encoding are deferred to
+    the function 'make_image' in the package of the same name.
+    """
+
+    # -- determine the encoding mode
+    content = slice.content
+    if content.dtype == numpy.uint8:
+        if hi <= 1:
+            img_mode = make_image.BLACK_AND_WHITE
         else:
-            raise Exception("unexpected array type: %s" % content.dtype)
-    
-        # -- generate and return the data
-        return make_image.make_image(content, lo, hi, mask_val, img_mode,
-                                     thumb_size, self.info)
+            img_mode = make_image.COLOR_CODED_FIXED
+    elif content.dtype == numpy.uint16:
+        img_mode = make_image.GRAYSCALE
+    elif content.dtype == numpy.int32:
+        img_mode = make_image.COLOR_CODED
+    elif content.dtype == numpy.float32:
+        img_mode = make_image.GRAYSCALE
+    else:
+        raise Exception("unexpected array type: %s" % content.dtype)
+
+    # -- generate and return the data
+    return make_image.make_image(content, lo, hi, mask_val, img_mode,
+                                 thumb_size, slice.info)
 
 
 def data_range(var, entries, log):
@@ -376,7 +376,7 @@ class Slicer:
         info.update({ 'slice-axis': axis, 'slice-pos': pos })
         slice = Slice(size, dtype, axis, pos, origin, info)
 
-        name = slice.make_name(self.slicename)
+        name = make_name(slice, self.slicename)
         if name in self.existing:
             if self.replace:
                 action = "REPLACE"
@@ -454,8 +454,8 @@ class Slicer:
             return
         elif self.dry_run:
             name = self.slicename
-            out = tuple((make_image.make_dummy(s.make_name(name), 256, 256, sz),
-                         s.make_name(name, sz), s.action)
+            out = tuple((make_image.make_dummy(make_name(s, name), 256, 256, sz),
+                         make_name(s, name, sz), s.action)
                         for s in slices for sz in self.sizes)
             self._slices = out
             return
@@ -494,8 +494,8 @@ class Slicer:
         
         # -- encode slices as PNG images
         self.log.writeln("Making the images...")
-        self._slices = tuple((s.image_data(lo, hi, mask_value, sz),
-                              s.make_name(self.slicename, sz), s.action)
+        self._slices = tuple((image_data(s, lo, hi, mask_value, sz),
+                              make_name(s, self.slicename, sz), s.action)
                              for s in slices for sz in self.sizes)
         
         # -- report success
