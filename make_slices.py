@@ -369,47 +369,6 @@ class Slicer:
         self._slices   = None
         self.log       = Logger()
     
-    def add_slice(self, slices, size, dtype, axis, pos, origin):
-        info = self.info.copy()
-        info.update({ 'slice-axis': axis, 'slice-pos': pos })
-        slice = Slice(size, dtype, axis, pos, origin, info)
-
-        name = make_name(slice, self.slicename)
-        if name in self.existing:
-            if self.replace:
-                action = "REPLACE"
-            else:
-                action = "SKIP"
-        else:
-            action= "ADD"
-        
-        if action != "SKIP":
-            slice.action = action
-            slices.append(slice)
-        
-    def default_slice_set(self, var, delta):
-        """
-        Creates a default list of empty slice instances based on the
-        shape of the volume variable <var>. For each axis, a slice
-        centered at that axis is created, provided that the extend of
-        the slice in both directions would be at least <delta>.
-        """
-        
-        pos = list((x - 1) / 2 for x in var.size)
-        size = var.size
-        dtype = var.dtype
-        origin = var.origin
-        
-        slices = []
-        if size[1] > delta and size[2] > delta:
-            self.add_slice(slices, size, dtype, 'x', pos[0], origin[0])
-        if size[0] > delta and size[2] > delta:
-            self.add_slice(slices, size, dtype, 'y', pos[1], origin[1])
-        if size[0] > delta and size[1] > delta:
-            self.add_slice(slices, size, dtype, 'z', pos[2], origin[2])
-
-        return slices
-        
     def process(self):
         """
         Internal! Processes all the volume data and generates the
@@ -446,7 +405,7 @@ class Slicer:
                        numpy.float32: 1.0e30 }[var.dtype]
 
         # -- initialize the slice set to be created
-        slices = self.default_slice_set(var, 10)
+        slices = default_slice_set(self, var, 10)
         if len(slices) == 0:
             self.log.writeln("No slices are to be made.")
             return
@@ -510,6 +469,44 @@ class Slicer:
         if self._slices is None:
             self.process()
         return self._slices
+
+
+def action(slicer, slice):
+    name = make_name(slice, slicer.slicename)
+    if name in slicer.existing:
+        return "REPLACE" if slicer.replace else "SKIP"
+    else:
+        return "ADD"
+
+def default_slice_set(slicer, var, delta):
+    """
+    Creates a default list of empty slice instances based on the
+    shape of the volume variable <var>. For each axis, a slice
+    centered at that axis is created, provided that the extend of
+    the slice in both directions would be at least <delta>.
+    """
+
+    def make_slice(size, dtype, axis, pos, origin):
+        info = slicer.info.copy()
+        info.update({ 'slice-axis': axis, 'slice-pos': pos })
+        slice = Slice(size, dtype, axis, pos, origin, info)
+        slice.action = action(slicer, slice)
+        return slice
+
+    pos = list((x - 1) / 2 for x in var.size)
+    size = var.size
+    dtype = var.dtype
+    origin = var.origin
+
+    slices = []
+    if size[1] > delta and size[2] > delta:
+        slices.append(make_slice(size, dtype, 'x', pos[0], origin[0]))
+    if size[0] > delta and size[2] > delta:
+        slices.append(make_slice(size, dtype, 'y', pos[1], origin[1]))
+    if size[0] > delta and size[1] > delta:
+        slices.append(make_slice(size, dtype, 'z', pos[2], origin[2]))
+
+    return filter(lambda s: s.action != 'SKIP', slices)
 
 
 if __name__ == "__main__":
