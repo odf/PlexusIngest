@@ -405,15 +405,21 @@ class Slicer:
                        numpy.float32: 1.0e30 }[var.dtype]
 
         # -- initialize the slice set to be created
-        slices = default_slice_set(self, var, 10)
+        slices = default_slice_set(self.info, var, 10)
+        names = list(make_name(s, self.slicename) for s in slices)
+        r_or_s = 'REPLACE' if self.replace else 'SKIP'
+        actions = list((r_or_s if n in self.existing else 'ADD') for n in names)
+        slices = list((slices[i], names[i], actions[i])
+                      for i in range(len(slices))
+                      if actions[i] != 'SKIP')
+
         if len(slices) == 0:
             self.log.writeln("No slices are to be made.")
             return
         elif self.dry_run:
-            name = self.slicename
-            out = tuple((make_image.make_dummy(make_name(s, name), 256, 256, sz),
-                         make_name(s, name, sz), s.action)
-                        for s in slices for sz in self.sizes)
+            out = tuple((make_image.make_dummy(n, 256, 256, sz),
+                         make_name(s, self.slicename, sz), a)
+                        for (s, n, a) in slices for sz in self.sizes)
             self._slices = out
             return
 
@@ -437,7 +443,7 @@ class Slicer:
                     self.log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
                 else:
                     hist.update(data)
-                    for s in slices:
+                    for (s, n, a) in slices:
                         s.update(data, z)
             
         # -- analyse histogram to determine 'lo' and 'hi' values
@@ -453,8 +459,8 @@ class Slicer:
         # -- encode slices as PNG images
         self.log.writeln("Making the images...")
         self._slices = tuple((image_data(s, lo, hi, mask_value, sz),
-                              make_name(s, self.slicename, sz), s.action)
-                             for s in slices for sz in self.sizes)
+                              make_name(s, self.slicename, sz), a)
+                             for (s, n, a) in slices for sz in self.sizes)
         
         # -- report success
         self.log.writeln("Slice image generation finished.")
@@ -471,14 +477,7 @@ class Slicer:
         return self._slices
 
 
-def action(slicer, slice):
-    name = make_name(slice, slicer.slicename)
-    if name in slicer.existing:
-        return "REPLACE" if slicer.replace else "SKIP"
-    else:
-        return "ADD"
-
-def default_slice_set(slicer, var, delta):
+def default_slice_set(info, var, delta):
     """
     Creates a default list of empty slice instances based on the
     shape of the volume variable <var>. For each axis, a slice
@@ -487,11 +486,9 @@ def default_slice_set(slicer, var, delta):
     """
 
     def make_slice(size, dtype, axis, pos, origin):
-        info = slicer.info.copy()
-        info.update({ 'slice-axis': axis, 'slice-pos': pos })
-        slice = Slice(size, dtype, axis, pos, origin, info)
-        slice.action = action(slicer, slice)
-        return slice
+        myinfo = info.copy()
+        myinfo.update({ 'slice-axis': axis, 'slice-pos': pos })
+        return Slice(size, dtype, axis, pos, origin, myinfo)
 
     pos = list((x - 1) / 2 for x in var.size)
     size = var.size
@@ -506,7 +503,7 @@ def default_slice_set(slicer, var, delta):
     if size[0] > delta and size[1] > delta:
         slices.append(make_slice(size, dtype, 'z', pos[2], origin[2]))
 
-    return filter(lambda s: s.action != 'SKIP', slices)
+    return slices
 
 
 if __name__ == "__main__":
