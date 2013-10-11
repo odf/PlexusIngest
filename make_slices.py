@@ -239,11 +239,10 @@ def top_percentile(histogram, p):
 
 
 class Slice:
-    def __init__(self, size, type, axis, pos, offset, info = {}):
+    def __init__(self, size, type, axis, pos, offset):
         self.axis   = axis.lower()
         self.pos    = pos
         self.offset = offset
-        self.info   = info
         self.slice_dims = {'x': (size[2], size[1]),
                            'y': (size[2], size[0]),
                            'z': (size[1], size[0]) }[self.axis]
@@ -277,7 +276,7 @@ def make_name(slice, basename, thumb_size = None):
     return "%sslice%c%d_%s.png" % (prefix, slice.axis.upper(),
                                    slice.pos + slice.offset, basename)
 
-def image_data(slice, lo, hi, mask_val, thumb_size = None):
+def image_data(slice, lo, hi, mask_val, info, thumb_size = None):
     """
     Converts a slice into an image and returns it as a PNG encoded
     string. The values <lo> and <hi> specify the range of relevant
@@ -304,9 +303,13 @@ def image_data(slice, lo, hi, mask_val, thumb_size = None):
     else:
         raise Exception("unexpected array type: %s" % content.dtype)
 
+    # -- generate slice-specific info
+    myinfo = info.copy()
+    myinfo.update({ 'slice-axis': slice.axis, 'slice-pos': slice.pos })
+
     # -- generate and return the data
     return make_image.make_image(content, lo, hi, mask_val, img_mode,
-                                 thumb_size, slice.info)
+                                 thumb_size, myinfo)
 
 
 def data_range(var, entries):
@@ -405,7 +408,7 @@ class Slicer:
                        numpy.float32: 1.0e30 }[var.dtype]
 
         # -- initialize the slice set to be created
-        slices = default_slice_set(self.info, var, 10)
+        slices = default_slice_set(var, 10)
         names = list(make_name(s, self.slicename) for s in slices)
         r_or_s = 'REPLACE' if self.replace else 'SKIP'
         actions = list((r_or_s if n in self.existing else 'ADD') for n in names)
@@ -458,7 +461,7 @@ class Slicer:
         
         # -- encode slices as PNG images
         self.log.writeln("Making the images...")
-        self._slices = tuple((image_data(s, lo, hi, mask_value, sz),
+        self._slices = tuple((image_data(s, lo, hi, mask_value, self.info, sz),
                               make_name(s, self.slicename, sz), a)
                              for (s, n, a) in slices for sz in self.sizes)
         
@@ -477,19 +480,13 @@ class Slicer:
         return self._slices
 
 
-def default_slice_set(info, var, delta):
+def default_slice_set(var, delta):
     """
     Creates a default list of empty slice instances based on the
     shape of the volume variable <var>. For each axis, a slice
     centered at that axis is created, provided that the extend of
     the slice in both directions would be at least <delta>.
     """
-
-    def make_slice(size, dtype, axis, pos, origin):
-        myinfo = info.copy()
-        myinfo.update({ 'slice-axis': axis, 'slice-pos': pos })
-        return Slice(size, dtype, axis, pos, origin, myinfo)
-
     pos = list((x - 1) / 2 for x in var.size)
     size = var.size
     dtype = var.dtype
@@ -497,11 +494,11 @@ def default_slice_set(info, var, delta):
 
     slices = []
     if size[1] > delta and size[2] > delta:
-        slices.append(make_slice(size, dtype, 'x', pos[0], origin[0]))
+        slices.append(Slice(size, dtype, 'x', pos[0], origin[0]))
     if size[0] > delta and size[2] > delta:
-        slices.append(make_slice(size, dtype, 'y', pos[1], origin[1]))
+        slices.append(Slice(size, dtype, 'y', pos[1], origin[1]))
     if size[0] > delta and size[1] > delta:
-        slices.append(make_slice(size, dtype, 'z', pos[2], origin[2]))
+        slices.append(Slice(size, dtype, 'z', pos[2], origin[2]))
 
     return slices
 
