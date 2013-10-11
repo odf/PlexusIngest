@@ -63,7 +63,8 @@ class VolumeVariable:
         dims = var.dimensions
         self.size = (dims[2].value, dims[1].value, dims[0].value)
         zdim_total = get_attribute(file, var, 'zdim_total')
-        if zdim_total is not None: self.size[2] = zdim_total[0]
+        if zdim_total is not None:
+            self.size = (self.size[0], self.size[1], zdim_total[0])
 
         # -- determine the origin
         origin = get_attribute(file, var, 'coordinate_origin_xyz')
@@ -308,16 +309,13 @@ def image_data(slice, lo, hi, mask_val, thumb_size = None):
                                  thumb_size, slice.info)
 
 
-def data_range(var, entries, log):
+def data_range(var, entries):
     minval = maxval = None
 
     for filename in entries:
-        log.writeln("Preprocessing %s..." % os.path.basename(filename))
         for tmp in z_slices(var, filename):
             z, data = tmp[:2]
-            if data is None:
-                log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
-            else:
+            if data is not None:
                 lo = numpy.min(data)
                 hi = numpy.max(data)
                 if minval is None or lo < minval:
@@ -465,7 +463,8 @@ class Slicer:
 
         # -- initialize the histogram
         if var.dtype == numpy.float32:
-            (minval, maxval) = data_range(var, entries, self.log)
+            self.log.writeln("Determining the data range...")
+            (minval, maxval) = data_range(var, entries)
             hist = Histogram(mask_value, minval, maxval)
         else:
             hist = Histogram(mask_value)
