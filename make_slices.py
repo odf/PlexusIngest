@@ -239,21 +239,20 @@ def top_percentile(histogram, p):
 
 
 class Slice:
-    def __init__(self, size, type, axis, pos, offset):
-        self.axis   = axis.lower()
-        self.pos    = pos
-        self.offset = offset
+    def __init__(self, size, type, axis, pos):
+        self.axis = axis.lower()
+        self.pos  = pos
         self.slice_dims = {'x': (size[2], size[1]),
                            'y': (size[2], size[0]),
                            'z': (size[1], size[0]) }[self.axis]
         self.content = numpy.zeros(self.slice_dims, type)
-    
+
     def update(self, z_slice, z_pos):
         """
         Updates this slices with data from the array <z_slice>, which
         is taken to be at z = <z_pos>.
         """
-        
+
         if self.axis == 'x':
             self.content[z_pos, :] = z_slice[:, self.pos]
         elif self.axis == 'y':
@@ -263,18 +262,38 @@ class Slice:
                 self.content[:, :] = z_slice[:, :]
 
 
-def make_name(slice, basename, thumb_size = None):
-    """
-    Creates a name for a slice from its axis and location and the string
-    <basename>.
-    """
+def sizeprefix(thumb_size):
+    return ("__%sx%s__" % thumb_size) if thumb_size else ""
 
-    if thumb_size is None:
-        prefix = ""
-    else:
-        prefix = "__%sx%s__" % thumb_size
-    return "%sslice%c%d_%s.png" % (prefix, slice.axis.upper(),
-                                   slice.pos + slice.offset, basename)
+
+def default_slice_set(var, delta, basename):
+    """
+    Creates a default list of empty slice instances, paired with
+    associated file names, based on the shape of the volume variable
+    <var>. For each axis, a slice centered at that axis is created,
+    provided that the extend of the slice in both directions would be at
+    least <delta>.
+    """
+    pos = list((x - 1) / 2 for x in var.size)
+    size = var.size
+    dtype = var.dtype
+    origin = var.origin
+
+    def slice_and_name(axis, pos, offset):
+        s = Slice(size, dtype, axis, pos)
+        n = "slice%c%d_%s.png" % (axis.upper(), pos + offset, basename)
+        return (s, n)
+
+    slices = []
+    if size[1] > delta and size[2] > delta:
+        slices.append(slice_and_name('x', pos[0], origin[0]))
+    if size[0] > delta and size[2] > delta:
+        slices.append(slice_and_name('y', pos[1], origin[1]))
+    if size[0] > delta and size[1] > delta:
+        slices.append(slice_and_name('z', pos[2], origin[2]))
+
+    return slices
+
 
 def image_data(slice, lo, hi, mask_val, info, thumb_size = None):
     """
@@ -360,7 +379,7 @@ class Slicer:
                  info = {}):
         self.path      = re.sub("/$", "", path)
         self.name      = re.sub("[._]nc$", "", os.path.basename(self.path))
-        self.slicename = re.sub("^tomo", "tom",
+        self.basename  = re.sub("^tomo", "tom",
                                 re.sub("^segmented", "seg", self.name))
         self.existing  = existing
         self.replace   = replace
@@ -408,11 +427,11 @@ class Slicer:
                        numpy.float32: 1.0e30 }[var.dtype]
 
         # -- initialize the slice set to be created
-        slices = default_slice_set(var, 10)
-        names = list(make_name(s, self.slicename) for s in slices)
+        slices = default_slice_set(var, 10, self.basename)
         r_or_s = 'REPLACE' if self.replace else 'SKIP'
-        actions = list((r_or_s if n in self.existing else 'ADD') for n in names)
-        slices = list((slices[i], names[i], actions[i])
+        actions = list((r_or_s if n in self.existing else 'ADD')
+                       for (s, n) in slices)
+        slices = list(slices[i] + (actions[i],)
                       for i in range(len(slices))
                       if actions[i] != 'SKIP')
 
@@ -421,7 +440,8 @@ class Slicer:
             return
         elif self.dry_run:
             out = tuple((make_image.make_dummy(n, 256, 256, sz),
-                         make_name(s, self.slicename, sz), a)
+                         sizeprefix(sz) + n,
+                         a)
                         for (s, n, a) in slices for sz in self.sizes)
             self._slices = out
             return
@@ -462,7 +482,8 @@ class Slicer:
         # -- encode slices as PNG images
         self.log.writeln("Making the images...")
         self._slices = tuple((image_data(s, lo, hi, mask_value, self.info, sz),
-                              make_name(s, self.slicename, sz), a)
+                              sizeprefix(sz) + n,
+                              a)
                              for (s, n, a) in slices for sz in self.sizes)
         
         # -- report success
@@ -480,33 +501,13 @@ class Slicer:
         return self._slices
 
 
-def default_slice_set(var, delta):
-    """
-    Creates a default list of empty slice instances based on the
-    shape of the volume variable <var>. For each axis, a slice
-    centered at that axis is created, provided that the extend of
-    the slice in both directions would be at least <delta>.
-    """
-    pos = list((x - 1) / 2 for x in var.size)
-    size = var.size
-    dtype = var.dtype
-    origin = var.origin
-
-    slices = []
-    if size[1] > delta and size[2] > delta:
-        slices.append(Slice(size, dtype, 'x', pos[0], origin[0]))
-    if size[0] > delta and size[2] > delta:
-        slices.append(Slice(size, dtype, 'y', pos[1], origin[1]))
-    if size[0] > delta and size[1] > delta:
-        slices.append(Slice(size, dtype, 'z', pos[2], origin[2]))
-
-    return slices
-
-
 if __name__ == "__main__":
     Logger().priority = LOGGER_INFO
     source = sys.argv[1]
-    slicer = Slicer(source, info = { 'source': source })
+    slicer = Slicer(source,
+                    info = { 'source': source },
+                    sizes = (None, (80,80)))
+
     for (data, name, action) in slicer.slices:
         fp = file(name, 'wb')
         fp.write(data)
