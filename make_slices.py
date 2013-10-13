@@ -30,44 +30,6 @@ import make_image
 from nc3header import NC3File
 
 
-class VolumeVariable:
-    """
-    Encapsulates information pertaining to the volume variable <var>
-    within the open NC3File <file>. Currently, the name, shape, origin
-    and data type - mapped to the corresponding numpy type - are
-    stored.
-    """
-    
-    def __init__(self, file, var):
-        # -- remember the name
-        self.name = var.name
-        
-        # -- extract the variable's shape
-        dims = var.dimensions
-        self.size = (dims[2].value, dims[1].value, dims[0].value)
-        zdim_total = get_attribute(file, var, 'zdim_total')
-        if zdim_total is not None:
-            self.size = (self.size[0], self.size[1], zdim_total[0])
-
-        # -- determine the origin
-        origin = get_attribute(file, var, 'coordinate_origin_xyz')
-        self.origin = origin or (0, 0, 0)
-
-        # -- determine the data type
-        (self.dtype, self.big_endian_type) = {
-          'b': (numpy.uint8,  numpy.dtype(">u1")),
-          'h': (numpy.uint16, numpy.dtype(">u2")),
-          'i': (numpy.int32,  numpy.dtype(">i4")),
-          'f': (numpy.float32, numpy.dtype(">f4")) }[var.python_type_code]
-
-    def __eq__(self, other):
-        return (self.name == other.name and self.size == other.size and
-                self.origin == other.origin and self.dtype == other.dtype)
-    
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-
 class Histogram:
     """
     Maintains a frequency count for a series of numpy arrays. Entries
@@ -158,6 +120,67 @@ def get_attribute(file, var, name):
     return None
 
 
+def volume_variable(file, var):
+    """
+    Extracts information pertaining to the volume variable <var> within
+    the open NC3File <file>. The name, shape, origin and data type -
+    mapped to the corresponding numpy type - are stored.
+    """
+    
+    # -- remember the name
+    name = var.name
+
+    # -- extract the variable's shape
+    dims = var.dimensions
+    size = (dims[2].value, dims[1].value, dims[0].value)
+    zdim_total = get_attribute(file, var, 'zdim_total')
+    if zdim_total is not None:
+        size = (size[0], size[1], zdim_total[0])
+
+    # -- determine the origin
+    origin = get_attribute(file, var, 'coordinate_origin_xyz') or (0, 0, 0)
+
+    # -- determine the data type
+    (dtype, big_endian_type) = {
+      'b': (numpy.uint8,  numpy.dtype(">u1")),
+      'h': (numpy.uint16, numpy.dtype(">u2")),
+      'i': (numpy.int32,  numpy.dtype(">i4")),
+      'f': (numpy.float32, numpy.dtype(">f4")) }[var.python_type_code]
+
+    return { 'name'  : name,
+             'size'  : size,
+             'origin': origin,
+             'dtype' : dtype,
+             'big_endian_type': big_endian_type }
+
+
+def find_variable(path):
+    """
+    Looks for a volume variable to extract slice images from in the
+    NetCDF file at location <path>. Returns an descriptor object of
+    class VolumeVariable if something appropriate is found, or None
+    otherwise.
+    """
+
+    # -- the default return value
+    var = None
+
+    # -- open the NetCDF file
+    file = NC3File(path)
+
+    # -- loop through all the variables in the file
+    for v in file.variables:
+        if (len(v.dimensions) == 3 and v.dimensions[0].value > 1 and
+            v.python_type_code in 'bhif'
+            ):
+            var = volume_variable(file, v)
+            break
+
+    # -- close the file and return the result
+    file.close()
+    return var
+
+
 def z_slices(variable, path):
     """
     A generator method that yields constant z slices corresponding
@@ -172,26 +195,29 @@ def z_slices(variable, path):
         for (z, data) in z_slices(var, path):
             ... # do something with data
     """
-        
+
     file = NC3File(path)
-        
+
     for var in file.variables:
-        if var.name == variable.name:
+        if var.name == variable['name']:
             break
     else:
         return
-        
-    if VolumeVariable(file, var) != variable:
+
+    if volume_variable(file, var) != variable:
         raise RuntimeError("variable mismatch between files")
+
+    (x, y, z) = variable['size']
+
     z_range = get_attribute(file, var, 'zdim_range')
     if z_range is None:
-        z_range = range(0, variable.size[2])
+        z_range = range(0, z)
     else:
         z_range = range(z_range[0], z_range[1] + 1)
-            
-    bytes_per_slice = variable.size[0] * variable.size[1] * var.element_size
+
+    bytes_per_slice = x * y * var.element_size
     offset = var.data_start
-        
+
     file.close()
 
     if path.endswith('.bz2'):
@@ -204,38 +230,11 @@ def z_slices(variable, path):
         if len(buffer) < bytes_per_slice:
             yield (z, None, "insufficient data")
             break
-        data = numpy.fromstring(buffer, variable.big_endian_type)
-        data.shape = (variable.size[1], variable.size[0])
+        data = numpy.fromstring(buffer, variable['big_endian_type'])
+        data.shape = (y, x)
         yield (z, data)
     fp.close()
 
-
-def find_variable(path):
-    """
-    Looks for a volume variable to extract slice images from in the
-    NetCDF file at location <path>. Returns an descriptor object of
-    class VolumeVariable if something appropriate is found, or None
-    otherwise.
-    """
-    
-    # -- the default return value
-    var = None
-
-    # -- open the NetCDF file
-    file = NC3File(path)
-    
-    # -- loop through all the variables in the file
-    for v in file.variables:
-        if (len(v.dimensions) == 3 and v.dimensions[0].value > 1 and
-            v.python_type_code in 'bhif'
-            ):
-            var = VolumeVariable(file, v)
-            break
-    
-    # -- close the file and return the result
-    file.close()
-    return var
-    
 
 def bottom_percentile(histogram, p):
     """
@@ -274,10 +273,10 @@ def default_slice_set(var, delta, basename):
     provided that the extend of the slice in both directions would be at
     least <delta>.
     """
-    pos = list((x - 1) / 2 for x in var.size)
-    size = var.size
-    dtype = var.dtype
-    origin = var.origin
+    pos = list((x - 1) / 2 for x in var['size'])
+    size = var['size']
+    dtype = var['dtype']
+    origin = var['origin']
 
     def slice_and_name(axis, pos, offset):
         s = Slice(size, dtype, axis, pos)
@@ -424,7 +423,7 @@ class Slicer:
         mask_value = { numpy.uint8:  0xff,
                        numpy.uint16: 0xffff,
                        numpy.int32:  0x7fffffff,
-                       numpy.float32: 1.0e30 }[var.dtype]
+                       numpy.float32: 1.0e30 }[var['dtype']]
 
         # -- initialize the slice set to be created
         slices = default_slice_set(var, 10, self.basename)
@@ -447,7 +446,7 @@ class Slicer:
             return
 
         # -- initialize the histogram
-        if var.dtype == numpy.float32:
+        if var['dtype'] == numpy.float32:
             self.log.writeln("Determining the data range...")
             (minval, maxval) = data_range(var, entries)
             hist = Histogram(mask_value, minval, maxval)
