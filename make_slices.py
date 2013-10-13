@@ -261,10 +261,6 @@ def top_percentile(histogram, p):
             return histogram.offset + i * histogram.binsize
 
 
-def sizeprefix(thumb_size):
-    return ("__%sx%s__" % thumb_size) if thumb_size else ""
-
-
 def default_slice_set(var, delta, basename):
     """
     Creates a default list of empty slice instances, paired with
@@ -411,51 +407,48 @@ def slices(path,
     if len(slices) == 0:
         log.writeln("No slices are to be made.")
         return
-    elif dry_run:
-        for (s, n, a) in slices:
-            for sz in sizes:
-                yield (make_image.make_dummy(n, 256, 256, sz),
-                       sizeprefix(sz) + n,
-                       a)
-        return
 
-    # -- initialize the histogram
-    if var['dtype'] == numpy.float32:
-        log.writeln("Determining the data range...")
-        (minval, maxval) = data_range(var, entries)
-        hist = Histogram(mask_value, minval, maxval)
-    else:
-        hist = Histogram(mask_value)
+    if not dry_run:
+        # -- initialize the histogram
+        if var['dtype'] == numpy.float32:
+            log.writeln("Determining the data range...")
+            (minval, maxval) = data_range(var, entries)
+            hist = Histogram(mask_value, minval, maxval)
+        else:
+            hist = Histogram(mask_value)
 
-    # -- loop through files and copy data into slice arrays
-    for filename in entries:
-        log.writeln("Processing %s..." % os.path.basename(filename))
-        for tmp in z_slices(var, filename):
-            z, data = tmp[:2]
-            if data is None:
-                log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
-            else:
-                hist.update(data)
-                for (s, n, a) in slices:
-                    s.update(data, z)
+        # -- loop through files and copy data into slice arrays
+        for filename in entries:
+            log.writeln("Processing %s..." % os.path.basename(filename))
+            for tmp in z_slices(var, filename):
+                z, data = tmp[:2]
+                if data is None:
+                    log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
+                else:
+                    hist.update(data)
+                    for (s, n, a) in slices:
+                        s.update(data, z)
 
-    # -- analyse histogram to determine 'lo' and 'hi' values
-    log.writeln("Analysing the histogram...")
-    if name.startswith("tom"):
-        # -- determine 0.1 and 99.9 percentile for contrast stretching
-        lo = bottom_percentile(hist, 0.1)
-        hi = top_percentile(hist, 0.1)
-    else:
-        lo = 0
-        hi = hist.counts.size - 1
+        # -- analyse histogram to determine 'lo' and 'hi' values
+        log.writeln("Analysing the histogram...")
+        if name.startswith("tom"):
+            # -- determine 0.1 and 99.9 percentile for contrast stretching
+            lo = bottom_percentile(hist, 0.1)
+            hi = top_percentile(hist, 0.1)
+        else:
+            lo = 0
+            hi = hist.counts.size - 1
 
     # -- encode slices as PNG images
     log.writeln("Making the images...")
     for (s, n, a) in slices:
         for sz in sizes:
-            yield (image_data(s, lo, hi, mask_value, info, sz),
-                   sizeprefix(sz) + n,
-                   a)
+            if dry_run:
+                data = make_image.make_dummy(n, 256, 256, sz)
+            else:
+                data = image_data(s, lo, hi, mask_value, info, sz)
+            prefix = ("__%sx%s__" % sz) if sz else ""
+            yield (data, prefix + n, a)
 
     # -- report success
     log.writeln("Slice image generation finished.")
