@@ -30,23 +30,6 @@ import make_image
 from nc3header import NC3File
 
 
-def get_attribute(file, var, name):
-    """
-    Looks in the open NC3File <file> for the attribute <name>,
-    first in the given variable <var> and then in the global
-    attributes. Return the attribute's value if found, or None
-    otherwise.
-    """
-    
-    for attr in var.attributes:
-        if attr.name == name:
-            return attr.value
-    for attr in file.attributes:
-        if attr.name == name:
-            return attr.value
-    return None
-
-
 class VolumeVariable:
     """
     Encapsulates information pertaining to the volume variable <var>
@@ -83,6 +66,96 @@ class VolumeVariable:
     
     def __ne__(self, other):
         return not self.__eq__(other)
+
+
+class Histogram:
+    """
+    Maintains a frequency count for a series of numpy arrays. Entries
+    equal to <mask_value> are counted separately. Negative values are
+    ignored.
+    """
+    
+    def __init__(self, mask_value = 0, minval = None, maxval = None):
+        # -- save the mask value
+        self.mask_value = mask_value
+        # -- initialize the frequency count
+        self.counts = numpy.array([], dtype = 'uint64')
+        # -- initialize the count of masked and total non-negative entries
+        self.total = 0
+        self.masked = 0
+
+        if maxval is not None:
+            self.offset = minval
+            self.binsize = (maxval - minval) * (1.0 - 1.0e-12) / 0x10000;
+        else:
+            self.offset = 0
+            self.binsize = 1
+
+    def update(self, slice):
+        """
+        Updates the frequency count with the data from the numpy array
+        <slice>.
+        """
+        
+        # -- process the new data
+        tmp = (slice.flatten() - self.offset) / self.binsize
+        flat = numpy.array(tmp, dtype = 'uint16')
+        mask = (flat == self.mask_value) | (flat < 0) | (flat > 0xffff)
+        new_masked = flat[mask].size
+        new_counts = numpy.bincount(numpy.where(mask, 0, flat))
+        
+        # -- update the frequency count, resizing if necessary
+        s = max(self.counts.size, new_counts.size)
+        if s > self.counts.size:
+            self.counts.resize(s)
+        if s > new_counts.size:
+            new_counts.resize(s)
+        self.counts += new_counts
+
+        # -- update the count of masked and total non-negative entries
+        self.masked += new_masked
+        self.total  += new_masked + int(new_counts.sum())
+
+
+class Slice:
+    def __init__(self, size, type, axis, pos):
+        self.axis = axis.lower()
+        self.pos  = pos
+        self.slice_dims = {'x': (size[2], size[1]),
+                           'y': (size[2], size[0]),
+                           'z': (size[1], size[0]) }[self.axis]
+        self.content = numpy.zeros(self.slice_dims, type)
+
+    def update(self, z_slice, z_pos):
+        """
+        Updates this slices with data from the array <z_slice>, which
+        is taken to be at z = <z_pos>.
+        """
+
+        if self.axis == 'x':
+            self.content[z_pos, :] = z_slice[:, self.pos]
+        elif self.axis == 'y':
+            self.content[z_pos, :] = z_slice[self.pos, :]
+        elif self.axis == 'z':
+            if z_pos == self.pos:
+                self.content[:, :] = z_slice[:, :]
+
+
+def get_attribute(file, var, name):
+    """
+    Looks in the open NC3File <file> for the attribute <name>,
+    first in the given variable <var> and then in the global
+    attributes. Return the attribute's value if found, or None
+    otherwise.
+    """
+    
+    for attr in var.attributes:
+        if attr.name == name:
+            return attr.value
+    for attr in file.attributes:
+        if attr.name == name:
+            return attr.value
+    return None
 
 
 def z_slices(variable, path):
@@ -164,55 +237,6 @@ def find_variable(path):
     return var
     
 
-class Histogram:
-    """
-    Maintains a frequency count for a series of numpy arrays. Entries
-    equal to <mask_value> are counted separately. Negative values are
-    ignored.
-    """
-    
-    def __init__(self, mask_value = 0, minval = None, maxval = None):
-        # -- save the mask value
-        self.mask_value = mask_value
-        # -- initialize the frequency count
-        self.counts = numpy.array([], dtype = 'uint64')
-        # -- initialize the count of masked and total non-negative entries
-        self.total = 0
-        self.masked = 0
-
-        if maxval is not None:
-            self.offset = minval
-            self.binsize = (maxval - minval) * (1.0 - 1.0e-12) / 0x10000;
-        else:
-            self.offset = 0
-            self.binsize = 1
-
-    def update(self, slice):
-        """
-        Updates the frequency count with the data from the numpy array
-        <slice>.
-        """
-        
-        # -- process the new data
-        tmp = (slice.flatten() - self.offset) / self.binsize
-        flat = numpy.array(tmp, dtype = 'uint16')
-        mask = (flat == self.mask_value) | (flat < 0) | (flat > 0xffff)
-        new_masked = flat[mask].size
-        new_counts = numpy.bincount(numpy.where(mask, 0, flat))
-        
-        # -- update the frequency count, resizing if necessary
-        s = max(self.counts.size, new_counts.size)
-        if s > self.counts.size:
-            self.counts.resize(s)
-        if s > new_counts.size:
-            new_counts.resize(s)
-        self.counts += new_counts
-
-        # -- update the count of masked and total non-negative entries
-        self.masked += new_masked
-        self.total  += new_masked + int(new_counts.sum())
-
-
 def bottom_percentile(histogram, p):
     """
     Returns the smallest number i such that at least <p> percent of
@@ -236,30 +260,6 @@ def top_percentile(histogram, p):
         count += int(histogram.counts[i])
         if count >= threshold:
             return histogram.offset + i * histogram.binsize
-
-
-class Slice:
-    def __init__(self, size, type, axis, pos):
-        self.axis = axis.lower()
-        self.pos  = pos
-        self.slice_dims = {'x': (size[2], size[1]),
-                           'y': (size[2], size[0]),
-                           'z': (size[1], size[0]) }[self.axis]
-        self.content = numpy.zeros(self.slice_dims, type)
-
-    def update(self, z_slice, z_pos):
-        """
-        Updates this slices with data from the array <z_slice>, which
-        is taken to be at z = <z_pos>.
-        """
-
-        if self.axis == 'x':
-            self.content[z_pos, :] = z_slice[:, self.pos]
-        elif self.axis == 'y':
-            self.content[z_pos, :] = z_slice[self.pos, :]
-        elif self.axis == 'z':
-            if z_pos == self.pos:
-                self.content[:, :] = z_slice[:, :]
 
 
 def sizeprefix(thumb_size):
