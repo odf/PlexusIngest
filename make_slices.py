@@ -85,7 +85,7 @@ class VolumeVariable:
         return not self.__eq__(other)
 
 
-def z_slices(var0, path):
+def z_slices(variable, path):
     """
     A generator method that yields constant z slices corresponding
     to the variable <var> from the NetCDF file located at <path>.
@@ -103,20 +103,20 @@ def z_slices(var0, path):
     file = NC3File(path)
         
     for var in file.variables:
-        if var.name == var0.name:
+        if var.name == variable.name:
             break
     else:
         return
         
-    if VolumeVariable(file, var) != var0:
+    if VolumeVariable(file, var) != variable:
         raise RuntimeError("variable mismatch between files")
     z_range = get_attribute(file, var, 'zdim_range')
     if z_range is None:
-        z_range = range(0, var0.size[2])
+        z_range = range(0, variable.size[2])
     else:
         z_range = range(z_range[0], z_range[1] + 1)
             
-    bytes_per_slice = var0.size[0] * var0.size[1] * var.element_size
+    bytes_per_slice = variable.size[0] * variable.size[1] * var.element_size
     offset = var.data_start
         
     file.close()
@@ -131,8 +131,8 @@ def z_slices(var0, path):
         if len(buffer) < bytes_per_slice:
             yield (z, None, "insufficient data")
             break
-        data = numpy.fromstring(buffer, var0.big_endian_type)
-        data.shape = (var0.size[1], var0.size[0])
+        data = numpy.fromstring(buffer, variable.big_endian_type)
+        data.shape = (variable.size[1], variable.size[0])
         yield (z, data)
     fp.close()
 
