@@ -13,7 +13,7 @@ This can be called either from the commandline or via the pattern
     updater.go(path)
     ...
 
-(Requires Python 2.4 or higher.)
+(Requires Python 2.6 or higher.)
 """
 
 import math, os, os.path, re, sys, time, traceback
@@ -24,7 +24,7 @@ from file_cache import FileCache
 from logger import *
 from nc3header import NC3Error
 from history import History
-from make_slices import Slicer
+from make_slices import slices
 from simple_upload import Connection
 
 
@@ -255,8 +255,8 @@ class Updater(Connection):
 
         if self.slices_missing(seen, SLICE_SIZES):
             if self.dry_run:
-                slicer = Slicer(path, seen, self.replace, true)
-                for (data, name, action) in slicer.slices:
+                s = slices(path, seen, self.replace, true)
+                for (data, name, action) in s:
                     self.print_action(project, sample, os.path.dirname(path),
                                       name, action)
             else:
@@ -274,9 +274,9 @@ class Updater(Connection):
                                                    "run_by"])
                 meta['path'] = os.path.abspath(path)
 
-                slicer = Slicer(path, seen, self.replace, self.mock_slices,
-                                sizes = SLICE_SIZES, info = meta)
-                for (data, name, action) in slicer.slices:
+                s = slices(path, seen, self.replace, self.mock_slices,
+                           sizes = SLICE_SIZES, info = meta)
+                for (data, name, action) in s:
                     self.upload_files(project, sample, timestring,
                                       ((data, name),), info)
         else:

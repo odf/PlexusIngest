@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Convenience script - extracts Plexus import file and slice images from NetCDF
 #
-# (c)2010 ANUSF
+# (c)2013 ANUSF
 
 if __name__ == "__main__":
     import sys, os, os.path, time
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     from logger import *
     from file_cache import FileCache
     from history import History
-    from make_slices import Slicer
+    from make_slices import slices
     
     Logger().priority = LOGGER_INFO
 
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     fp.write(h.as_json)
     fp.close()
 
-    for (data, name, action) in Slicer(fname, dry_run = mock).slices:
+    for (data, name, action) in slices(fname, dry_run = mock):
         fp = file(name, 'wb')
         fp.write(data)
         fp.close()
