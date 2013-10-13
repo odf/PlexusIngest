@@ -12,7 +12,7 @@ dimensions for a slice image would be less than 10, that slice is
 suppressed. Image output is in .png format.
 
 Typical usage:
-    for (data, name, action) in Slicer(path).slices:
+    for (data, name, action) in slices(path):
         fp = file(name, 'wb')
         fp.write(data)
         fp.close()
@@ -347,164 +347,126 @@ def data_range(var, entries):
     return (minval, maxval)
 
 
-class Slicer:
+def slices(path,
+           existing = [],
+           replace = False,
+           dry_run = False,
+           sizes = (None,),
+           info = {}):
     """
-    Encapsulates the data and methods used in extracting slice images
-    from a Mango volume data set stored in a collection of NetCDF
-    files.
-    
-    Currently, there is a single constructor parameter <path>,
-    specifying a single NetCDF file or a directory containing a single
-    volume split into several NetCDF files.
-    
-    The lazy property 'slices' holds the result of the slice extraction
-    as an immutable list of (data, name) pairs.
-    
-    All other methods and properties are currently only for internal
-    use.
+    A generator which extracts slice images from a Mango volume data set
+    stored in a collection of NetCDF files.
 
-    Typical usage:
-        for (data, name, action) in Slicer(path).slices:
+    The parameter <path> specifies a single NetCDF file or a directory
+    containing a single volume split into several NetCDF files.
+
+    Basic usage:
+        for (data, name, action) in slices(path):
             fp = file(name, 'wb')
             fp.write(data)
             fp.close()
     """
 
-    def __init__(self, path,
-                 existing = [],
-                 replace = False,
-                 dry_run = False,
-                 sizes = (None,),
-                 info = {}):
-        self.path      = re.sub("/$", "", path)
-        self.name      = re.sub("[._]nc$", "", os.path.basename(self.path))
-        self.basename  = re.sub("^tomo", "tom",
-                                re.sub("^segmented", "seg", self.name))
-        self.existing  = existing
-        self.replace   = replace
-        self.dry_run   = dry_run
-        self.sizes     = sizes
-        self.info      = info
-        
-        self.img_mode  = None
-        self._slices   = None
-        self.log       = Logger()
-    
-    def process(self):
-        """
-        Internal! Processes all the volume data and generates the
-        slices.
-        """
-        
-        # -- set empty result as fallback (so this method is not called twice)
-        self._slices = ()
-        
-        # -- collect the list of files to be processed
-        if os.path.isdir(self.path):
-            entries = list(os.path.join(root, f)
-                           for (root, dirs, files) in os.walk(self.path)
-                           for f in files)
-            entries.sort()
-        else:
-            entries = [ self.path ]
-        if not entries:
-            return
-        
-        # -- find a useable volume variable and analyse it
-        filename = entries[0]
-        self.log.writeln("Slicer: looking for a volume variable in %s..." %
-                         os.path.basename(filename))
-        var = find_variable(filename)
-        if var is None :
-            self.log.writeln("No appropriate volume data found.")
-            return
-        
-        # -- determine the appropriate mask value
-        mask_value = { numpy.uint8:  0xff,
-                       numpy.uint16: 0xffff,
-                       numpy.int32:  0x7fffffff,
-                       numpy.float32: 1.0e30 }[var['dtype']]
+    path      = re.sub("/$", "", path)
+    name      = re.sub("[._]nc$", "", os.path.basename(path))
+    basename  = re.sub("^tomo", "tom", re.sub("^segmented", "seg", name))
+    img_mode  = None
+    log       = Logger()
 
-        # -- initialize the slice set to be created
-        slices = default_slice_set(var, 10, self.basename)
-        r_or_s = 'REPLACE' if self.replace else 'SKIP'
-        actions = list((r_or_s if n in self.existing else 'ADD')
-                       for (s, n) in slices)
-        slices = list(slices[i] + (actions[i],)
-                      for i in range(len(slices))
-                      if actions[i] != 'SKIP')
+    # -- collect the list of files to be processed
+    if os.path.isdir(path):
+        entries = list(os.path.join(root, f)
+                       for (root, dirs, files) in os.walk(path)
+                       for f in files)
+        entries.sort()
+    else:
+        entries = [ path ]
+    if not entries:
+        return
 
-        if len(slices) == 0:
-            self.log.writeln("No slices are to be made.")
-            return
-        elif self.dry_run:
-            out = tuple((make_image.make_dummy(n, 256, 256, sz),
-                         sizeprefix(sz) + n,
-                         a)
-                        for (s, n, a) in slices for sz in self.sizes)
-            self._slices = out
-            return
+    # -- find a useable volume variable and analyse it
+    filename = entries[0]
+    log.writeln("slices(): looking for a volume variable in %s..." %
+                os.path.basename(filename))
+    var = find_variable(filename)
+    if var is None :
+        log.writeln("No appropriate volume data found.")
+        return
 
-        # -- initialize the histogram
-        if var['dtype'] == numpy.float32:
-            self.log.writeln("Determining the data range...")
-            (minval, maxval) = data_range(var, entries)
-            hist = Histogram(mask_value, minval, maxval)
-        else:
-            hist = Histogram(mask_value)
+    # -- determine the appropriate mask value
+    mask_value = { numpy.uint8:  0xff,
+                   numpy.uint16: 0xffff,
+                   numpy.int32:  0x7fffffff,
+                   numpy.float32: 1.0e30 }[var['dtype']]
 
-        # -- loop through files and copy data into slice arrays
-        for filename in entries:
-            self.log.writeln("Processing %s..." % os.path.basename(filename))
-            for tmp in z_slices(var, filename):
-                z, data = tmp[:2]
-                if data is None:
-                    self.log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
-                else:
-                    hist.update(data)
-                    for (s, n, a) in slices:
-                        s.update(data, z)
-            
-        # -- analyse histogram to determine 'lo' and 'hi' values
-        self.log.writeln("Analysing the histogram...")
-        if self.name.startswith("tom"):
-            # -- determine 0.1 and 99.9 percentile for contrast stretching
-            lo = bottom_percentile(hist, 0.1)
-            hi = top_percentile(hist, 0.1)
-        else:
-            lo = 0
-            hi = hist.counts.size - 1
-        
-        # -- encode slices as PNG images
-        self.log.writeln("Making the images...")
-        self._slices = tuple((image_data(s, lo, hi, mask_value, self.info, sz),
-                              sizeprefix(sz) + n,
-                              a)
-                             for (s, n, a) in slices for sz in self.sizes)
-        
-        # -- report success
-        self.log.writeln("Slice image generation finished.")
+    # -- initialize the slice set to be created
+    slices = default_slice_set(var, 10, basename)
+    r_or_s = 'REPLACE' if replace else 'SKIP'
+    actions = list((r_or_s if n in existing else 'ADD')
+                   for (s, n) in slices)
+    slices = list(slices[i] + (actions[i],)
+                  for i in range(len(slices))
+                  if actions[i] != 'SKIP')
 
-    @property
-    def slices(self):
-        """
-        Implements the 'slices' property. Calls process() if no slices
-        have yet been computed.
-        """
-        
-        if self._slices is None:
-            self.process()
-        return self._slices
+    if len(slices) == 0:
+        log.writeln("No slices are to be made.")
+        return
+    elif dry_run:
+        for (s, n, a) in slices:
+            for sz in sizes:
+                yield (make_image.make_dummy(n, 256, 256, sz),
+                       sizeprefix(sz) + n,
+                       a)
+        return
+
+    # -- initialize the histogram
+    if var['dtype'] == numpy.float32:
+        log.writeln("Determining the data range...")
+        (minval, maxval) = data_range(var, entries)
+        hist = Histogram(mask_value, minval, maxval)
+    else:
+        hist = Histogram(mask_value)
+
+    # -- loop through files and copy data into slice arrays
+    for filename in entries:
+        log.writeln("Processing %s..." % os.path.basename(filename))
+        for tmp in z_slices(var, filename):
+            z, data = tmp[:2]
+            if data is None:
+                log.writeln(tmp[2] + " at z = %d" % z, LOGGER_WARNING)
+            else:
+                hist.update(data)
+                for (s, n, a) in slices:
+                    s.update(data, z)
+
+    # -- analyse histogram to determine 'lo' and 'hi' values
+    log.writeln("Analysing the histogram...")
+    if name.startswith("tom"):
+        # -- determine 0.1 and 99.9 percentile for contrast stretching
+        lo = bottom_percentile(hist, 0.1)
+        hi = top_percentile(hist, 0.1)
+    else:
+        lo = 0
+        hi = hist.counts.size - 1
+
+    # -- encode slices as PNG images
+    log.writeln("Making the images...")
+    for (s, n, a) in slices:
+        for sz in sizes:
+            yield (image_data(s, lo, hi, mask_value, info, sz),
+                   sizeprefix(sz) + n,
+                   a)
+
+    # -- report success
+    log.writeln("Slice image generation finished.")
 
 
 if __name__ == "__main__":
     Logger().priority = LOGGER_INFO
     source = sys.argv[1]
-    slicer = Slicer(source,
-                    info = { 'source': source },
-                    sizes = (None, (80,80)))
+    s = slices(source, info = { 'source': source }, sizes = (None, (80,80)))
 
-    for (data, name, action) in slicer.slices:
+    for (data, name, action) in s:
         fp = file(name, 'wb')
         fp.write(data)
         fp.close()
