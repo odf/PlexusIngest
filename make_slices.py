@@ -446,9 +446,6 @@ class Slicer:
             self._slices = out
             return
 
-        # -- set up an array to hold the current z slice
-        buffer = numpy.zeros((var.size[1], var.size[0]), var.dtype)
-
         # -- initialize the histogram
         if var.dtype == numpy.float32:
             self.log.writeln("Determining the data range...")
