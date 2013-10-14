@@ -161,6 +161,82 @@ class NC3Variable:
                               ", ".join((d.name for d in self.dimensions)))
 
 
+def read_values(fp, type_code, number):
+    tp = NC_TYPE[type_code]
+    size = tp.size * number
+    value = fp.read(size)
+    if len(value) < size:
+        raise Error("Premature end of file.")
+    fp.seek(3 - (size + 3) % 4, SEEK_CUR)
+    if type_code == NC_CHAR:
+        return value
+    else:
+        return struct.unpack(">%d%s" % (number, tp.py_code), value)
+
+def read_integer(fp):
+    return read_values(fp, NC_LONG, 1)[0]
+
+def read_non_negative(fp):
+    n = read_integer(fp)
+    if n < 0:
+        raise Error("Non-negative number expected")
+    return n
+
+def read_string(fp):
+    size = read_non_negative(fp)
+    return read_values(fp, NC_CHAR, size)
+
+def read_dimensions(fp):
+    dimensions = []
+    tag = read_integer(fp)
+    ndims = read_non_negative(fp)
+    if tag == NC_DIMENSION:
+        for i in range(ndims):
+            name = read_string(fp)
+            size = read_non_negative(fp)
+            dimensions.append(NC3Dimension(name, size))
+    elif tag != 0 or ndims != 0:
+        raise Error("Expected dimension array.")
+
+    return dimensions
+
+def read_attributes(fp):
+    attributes = []
+    tag = read_integer(fp)
+    nattr = read_non_negative(fp)
+    if tag == NC_ATTRIBUTE:
+        for i in range(nattr):
+            name = read_string(fp)
+            type = read_integer(fp)
+            size = read_non_negative(fp)
+            values = read_values(fp, type, size)
+            attributes.append(NC3Attribute(name, values))
+    elif tag != 0 or nattr != 0:
+        raise Error("Expected attribute array.")
+
+    return attributes
+
+def read_variables(fp, dimensions):
+    variables = []
+    tag = read_integer(fp)
+    nvars = read_non_negative(fp)
+    if tag == NC_VARIABLE:
+        for i in range(nvars):
+            name = read_string(fp)
+            ndims = read_non_negative(fp)
+            dims = tuple(dimensions[read_non_negative(fp)]
+                         for x in range(ndims))
+            attr = read_attributes(fp)
+            nc_type = read_integer(fp)
+            size = read_non_negative(fp)
+            start = read_non_negative(fp)
+            variables.append(NC3Variable(name, dims, attr, nc_type, size, start))
+    elif tag != 0 or nvars != 0:
+        raise Error("Expected variable descriptions.")
+
+    return variables
+
+
 class NC3File:
     """
     Represents the complete header data from a NetCDF file. The
@@ -196,109 +272,16 @@ class NC3File:
         self.log.leave()
         
     def parse_header(self):
-        magic = self.get_values(NC_CHAR, 4)
+        magic = read_values(self.file, NC_CHAR, 4)
         if magic != "CDF\001":
             raise NC3Error(self, "Not a NetCDF version 1 file.")
-        self.numrecords = self.read_non_negative()
-        self.dimensions = self.read_dimensions()
-        self.attributes = self.read_attributes()
-        self.variables  = self.read_variables()
+        self.numrecords = read_non_negative(self.file)
+        self.dimensions = read_dimensions(self.file)
+        self.attributes = read_attributes(self.file)
+        self.variables  = read_variables(self.file, self.dimensions)
         self.header_size = self.file.tell()
         self.file.seek(0)
         self.fingerprint = hexdigest(self.file.read(self.header_size))
-        
-    def get_values(self, type_code, number):
-        type = NC_TYPE[type_code]
-        size = type.size * number
-        value = self.file.read(size)
-        if len(value) < size:
-            raise NC3Error(self, "Premature end of file.")
-        self.file.seek(3 - (size + 3) % 4, SEEK_CUR)
-        if type_code == NC_CHAR:
-            return value
-        else:
-            return struct.unpack(">%d%s" % (number, type.py_code), value)
-    
-    def read_integer(self):
-        return self.get_values(NC_LONG, 1)[0]
-    
-    def read_non_negative(self):
-        n = self.read_integer()
-        if n < 0:
-            raise NC3Error(self, "Non-negative number expected")
-        return n
-    
-    def read_string(self):
-        size = self.read_non_negative()
-        return self.get_values(NC_CHAR, size)
-    
-    def read_dimensions(self):
-        self.log.writeln("Dimensions:", LOGGER_TRACE)
-        self.log.enter()
-        
-        dimensions = []
-        tag = self.read_integer()
-        ndims = self.read_non_negative()
-        if tag == NC_DIMENSION:
-            for i in range(ndims):
-                name = self.read_string()
-                size = self.read_non_negative()
-                dimensions.append(NC3Dimension(name, size))
-                self.log.writeln("%s" % dimensions[-1], LOGGER_TRACE)
-        elif tag != 0 or ndims != 0:
-            raise NC3Error(self, "Expected dimension array.")
-        
-        self.log.leave()
-        return dimensions
-    
-    def read_attributes(self):
-        self.log.writeln("Attributes:", LOGGER_TRACE)
-        self.log.enter()
-        
-        attributes = []
-        tag = self.read_integer()
-        nattr = self.read_non_negative()
-        if tag == NC_ATTRIBUTE:
-            for i in range(nattr):
-                name = self.read_string()
-                type = self.read_integer()
-                size = self.read_non_negative()
-                values = self.get_values(type, size)
-                attributes.append(NC3Attribute(name, values))
-                self.log.writeln("%s" % attributes[-1], LOGGER_TRACE)
-        elif tag != 0 or nattr != 0:
-            raise NC3Error(self, "Expected attribute array.")
-        
-        self.log.leave()
-        return attributes
-    
-    def read_variables(self):
-        self.log.writeln("Variables:", LOGGER_TRACE)
-        self.log.enter()
-        
-        variables = []
-        tag = self.read_integer()
-        nvars = self.read_non_negative()
-        if tag == NC_VARIABLE:
-            for i in range(nvars):
-                name = self.read_string()
-                ndims = self.read_non_negative()
-                dims = tuple( self.dimensions[self.read_non_negative()]
-                              for x in range(ndims))
-                self.log.enter()
-                attr = self.read_attributes()
-                self.log.leave()
-                nc_type = self.read_integer()
-                size = self.read_non_negative()
-                start = self.read_non_negative()
-                variables.append(NC3Variable(name, dims, attr,
-                                             nc_type, size, start))
-                self.log.writeln("%s" % variables[-1], LOGGER_TRACE)
-        elif tag != 0 or nvars != 0:
-            raise NC3Error(self, "Expected variable descriptions.")
-        
-        self.log.leave()
-        return variables
 
 
 def looksLikeNetCDF(name):
