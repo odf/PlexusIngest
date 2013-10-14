@@ -122,9 +122,9 @@ def get_attribute(file, var, name):
 
 def volume_variable(file, var):
     """
-    Extracts information pertaining to the volume variable <var> within
-    the open NC3File <file>. The name, shape, origin and data type -
-    mapped to the corresponding numpy type - are stored.
+    Extracts information pertaining to the volume variable <var> within the
+    NC3File <file>. The name, shape, origin and data type - mapped to the
+    corresponding numpy type - are stored.
     """
     
     # -- remember the name
@@ -173,12 +173,7 @@ def find_variable(path):
         if (len(v.dimensions) == 3 and v.dimensions[0].value > 1 and
             v.python_type_code in 'bhif'
             ):
-            var = volume_variable(file, v)
-            break
-
-    # -- close the file and return the result
-    file.close()
-    return var
+            return volume_variable(file, v)
 
 
 def z_slices(variable, path):
@@ -217,8 +212,6 @@ def z_slices(variable, path):
 
     bytes_per_slice = x * y * var.element_size
     offset = var.data_start
-
-    file.close()
 
     if path.endswith('.bz2'):
         fp = bz2.BZ2File(path, 'r', 1024 * 1024)

@@ -513,7 +513,6 @@ class History:
             nc3file = nc3file_from_directory(source)
             attributes = self.extract_attributes(nc3file)
             fingerprint = nc3file.fingerprint
-            nc3file.close()
 
         self.logger = Logger()
         self.name = name

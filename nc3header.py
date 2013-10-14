@@ -300,9 +300,6 @@ class NC3File:
         self.log.leave()
         return variables
 
-    def close(self):
-        pass
-
 
 def looksLikeNetCDF(name):
     if name.endswith(".bz2"):
