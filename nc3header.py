@@ -9,17 +9,10 @@ The class NC3File is used to parse and represent header information.
 There is no direct support as yet for reading the actual data.
 """
 
-import os, os.path, re, struct
+import os, os.path, re, struct, hashlib
 
-from file_cache import FileCache, SEEK_CUR
+from file_cache import FileCache
 from logger import Logger, LOGGER_TRACE, LOGGER_INFO, LOGGER_WARNING
-
-try:
-    import hashlib
-    def hexdigest(s): return hashlib.md5(s).hexdigest()
-except ImportError:
-    import md5
-    def hexdigest(s): return md5.new(s).hexdigest()
 
 
 class NC3Error(RuntimeError):
@@ -167,7 +160,7 @@ def read_values(fp, type_code, number):
     value = fp.read(size)
     if len(value) < size:
         raise Error("Premature end of file.")
-    fp.seek(3 - (size + 3) % 4, SEEK_CUR)
+    fp.read(3 - (size + 3) % 4)
     if type_code == NC_CHAR:
         return value
     else:
@@ -237,6 +230,28 @@ def read_variables(fp, dimensions):
     return variables
 
 
+class MD5Wrapper:
+    def __init__(self, fp):
+        self._fp = fp
+        self._count = 0
+        self._md5 = hashlib.md5()
+
+    def read(self, size):
+        data = self._fp.read(size)
+        self._count += len(data)
+        self._md5.update(data)
+        return data
+
+    def close(self):
+        return self._fp.close()
+
+    def count(self):
+        return self._count
+
+    def hexdigest(self):
+        return self._md5.hexdigest()
+
+
 class NC3File:
     """
     Represents the complete header data from a NetCDF file. The
@@ -245,11 +260,12 @@ class NC3File:
     
     Useful properties:
     
-    path          - the file's location on the file system
-    dimensions    - the list of dimensions defined (type NC3Dimension)
-    attributes    - the list of attributes defined (type NC3Attribute)
-    variables     - the list of variables (type NC3Variable)
-    header_size   - the header size on file in bytes
+    path        - the file's location on the file system
+    dimensions  - the list of dimensions defined (type NC3Dimension)
+    attributes  - the list of attributes defined (type NC3Attribute)
+    variables   - the list of variables (type NC3Variable)
+    header_size - the header size on file in bytes
+    fingerprint - the MD5 hexdigest value of the header contents
     """
     def __init__(self, path):
         # -- remember the file system path
@@ -261,27 +277,23 @@ class NC3File:
         self.log.enter()
         
         # -- open the physical file, parse and close
-        self.file = FileCache(path)
+        self.file = MD5Wrapper(FileCache(path))
         try:
-            self.parse_header()
+            magic = read_values(self.file, NC_CHAR, 4)
+            if magic != "CDF\001":
+                raise NC3Error(self, "Not a NetCDF version 1 file.")
+            self.numrecords = read_non_negative(self.file)
+            self.dimensions = read_dimensions(self.file)
+            self.attributes = read_attributes(self.file)
+            self.variables  = read_variables(self.file, self.dimensions)
         finally:
+            self.header_size = self.file.count()
+            self.fingerprint = self.file.hexdigest()
             self.file.close()
         
         # -- more logging
         self.log.trace("Header size is %d." % self.header_size)
         self.log.leave()
-        
-    def parse_header(self):
-        magic = read_values(self.file, NC_CHAR, 4)
-        if magic != "CDF\001":
-            raise NC3Error(self, "Not a NetCDF version 1 file.")
-        self.numrecords = read_non_negative(self.file)
-        self.dimensions = read_dimensions(self.file)
-        self.attributes = read_attributes(self.file)
-        self.variables  = read_variables(self.file, self.dimensions)
-        self.header_size = self.file.tell()
-        self.file.seek(0)
-        self.fingerprint = hexdigest(self.file.read(self.header_size))
 
 
 def looksLikeNetCDF(name):
