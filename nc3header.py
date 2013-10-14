@@ -76,6 +76,28 @@ for (nc_code, name, size, py_code) in (
     NC_TYPE[nc_code] = NC3Type(nc_code, name, size, py_code)
 
 
+def fmt(val):
+    "Recursively formats an attribute value."
+    if type(val) is str:
+        # -- escape all double quotes that aren't already escaped
+        result = []
+        escaped = False
+        for piece in re.split('(")', val):
+            if piece == '"' and not escaped:
+                result.append('\\')
+            result.append(piece)
+            escaped = piece.endswith('\\')
+        tmp = ''.join(result)
+        # -- split along line breaks and quote each line separately
+        return ('"%s"' % tmp).replace('\n', '\\n",\n\t\t\t"')
+    elif type(val) in ( tuple, list ):
+        # -- format aggregates as comma-separated lists
+        return ", ".join(map(fmt, val))
+    else:
+        # -- everything else should be simply a number
+        return str(val)
+
+
 class NC3Dimension:
     """
     Represents a dimension. Accessible fields are 'name' and 'value'.
@@ -86,7 +108,8 @@ class NC3Dimension:
         
     def __str__(self):
         return "%s = %d" % (self.name, self.value)
-    
+
+
 class NC3Attribute:
     """
     Represents an attribute. Accessible fields are 'name' and 'value'.
@@ -95,37 +118,8 @@ class NC3Attribute:
         self.name = name
         self.value = value
     
-    @property
-    def value_as_string(self):
-        """
-        Produces a printable representation of the attribute's value.
-        """
-        
-        def fmt(val):
-            "Recursive inner method! Formats a value."
-            if type(val) is str:
-                # -- escape all double quotes that aren't already escaped
-                result = []
-                escaped = False
-                for piece in re.split('(")', val):
-                    if piece == '"' and not escaped:
-                        result.append('\\')
-                    result.append(piece)
-                    escaped = piece.endswith('\\')
-                tmp = ''.join(result)
-                # -- split along line breaks and quote each line separately
-                return ('"%s"' % tmp).replace('\n', '\\n",\n\t\t\t"')
-            elif type(val) in ( tuple, list ):
-                # -- format aggregates as comma-separated lists
-                return ", ".join(map(fmt, val))
-            else:
-                # -- everything else should be simply a number
-                return str(val)
-        
-        return fmt(self.value)
-                
     def __str__(self):
-        return "%s = %s" % (self.name, self.value_as_string)
+        return "%s = %s" % (self.name, fmt(self.value))
     
 
 class NC3Variable:
@@ -176,20 +170,15 @@ class NC3File:
     Useful properties:
     
     path          - the file's location on the file system
-    name          - the name to be used for the associated data set
     dimensions    - the list of dimensions defined (type NC3Dimension)
     attributes    - the list of attributes defined (type NC3Attribute)
     variables     - the list of variables (type NC3Variable)
     header_size   - the header size on file in bytes
-    header_as_cdl - the header in readable form using the CDL format
     """
-    def __init__(self, path, name = None):
+    def __init__(self, path):
         # -- remember the file system path
         self.path = path
         
-        # -- use the file name as the data set name if none was given
-        self.name = basenameNetCDF(name or os.path.basename(path))
-            
         # -- some logging
         self.log = Logger()
         self.log.writeln("Parsing NetCDF header from %s..." % path)
@@ -348,7 +337,7 @@ def nc3file_from_directory(path):
         raise NC3Error(path, "No NetCDF files found.")
         
     # -- open the first file and return the object
-    return NC3File(entries[0], name)
+    return NC3File(entries[0])
 
 
 if __name__ == "__main__":
