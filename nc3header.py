@@ -270,30 +270,30 @@ class NC3File:
     def __init__(self, path):
         # -- remember the file system path
         self.path = path
-        
+
         # -- some logging
-        self.log = Logger()
-        self.log.writeln("Parsing NetCDF header from %s..." % path)
-        self.log.enter()
+        log = Logger()
+        log.writeln("Parsing NetCDF header from %s..." % path)
+        log.enter()
         
         # -- open the physical file, parse and close
-        self.file = MD5Wrapper(FileCache(path))
+        fp = MD5Wrapper(FileCache(path))
         try:
-            magic = read_values(self.file, NC_CHAR, 4)
+            magic = read_values(fp, NC_CHAR, 4)
             if magic != "CDF\001":
                 raise NC3Error(self, "Not a NetCDF version 1 file.")
-            self.numrecords = read_non_negative(self.file)
-            self.dimensions = read_dimensions(self.file)
-            self.attributes = read_attributes(self.file)
-            self.variables  = read_variables(self.file, self.dimensions)
+            self.numrecords = read_non_negative(fp)
+            self.dimensions = read_dimensions(fp)
+            self.attributes = read_attributes(fp)
+            self.variables  = read_variables(fp, self.dimensions)
         finally:
-            self.header_size = self.file.count()
-            self.fingerprint = self.file.hexdigest()
-            self.file.close()
+            self.header_size = fp.count()
+            self.fingerprint = fp.hexdigest()
+            fp.close()
         
         # -- more logging
-        self.log.trace("Header size is %d." % self.header_size)
-        self.log.leave()
+        log.trace("Header size is %d." % self.header_size)
+        log.leave()
 
 
 def looksLikeNetCDF(name):
