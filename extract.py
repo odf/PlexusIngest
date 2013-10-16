@@ -11,6 +11,7 @@ if __name__ == "__main__":
     from file_cache import FileCache
     from history import History
     from make_slices import slices
+    from nc3header import nc3info_from_directory
     
     Logger().priority = LOGGER_INFO
 
@@ -27,7 +28,8 @@ if __name__ == "__main__":
     mock = options.mock_slices
 
     fname = args[0]
-    h = History(fname, fname, time.gmtime(os.stat(fname).st_mtime))
+    info = nc3info_from_directory(fname)
+    h = History(info, fname, time.gmtime(os.stat(fname).st_mtime))
     fp = file(os.path.basename(fname) + ".json", "w")
     fp.write(h.as_json)
     fp.close()

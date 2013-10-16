@@ -24,6 +24,7 @@ from file_cache import FileCache
 from logger import *
 from history import History
 from make_slices import slices
+from nc3header import nc3info_from_directory
 from simple_upload import Connection
 
 
@@ -259,7 +260,7 @@ class Updater(Connection):
                     self.print_action(project, sample, os.path.dirname(path),
                                       name, action)
             else:
-                history = History(path, path,
+                history = History(nc3info_from_directory(path), path,
                                   time.gmtime(os.path.getmtime(path)))
                 main = history.main_process().record
                 meta = dict((k, main[k]) for k in ["data_file",
@@ -352,7 +353,8 @@ class Updater(Connection):
                 if self.dry_run:
                     self.print_action(project, sample, location, name, action)
                 else:
-                    data = History(path, path, time.gmtime(mtime)).as_json
+                    data = History(nc3info_from_directory(path),
+                                   path, time.gmtime(mtime)).as_json
                     _, res = self.upload_files(project, sample,
                                                t, ((data, path),))
                     seen[name]['IdExt'] = res.get('MainNodeExternalID')
