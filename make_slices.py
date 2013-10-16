@@ -103,9 +103,9 @@ class Slice:
                 self.content[:, :] = z_slice[:, :]
 
 
-def get_attribute(file, var, name):
+def get_attribute(info, var, name):
     """
-    Looks in the open NC3File <file> for the attribute <name>,
+    Looks in the open NC3File <info> for the attribute <name>,
     first in the given variable <var> and then in the global
     attributes. Return the attribute's value if found, or None
     otherwise.
@@ -114,16 +114,16 @@ def get_attribute(file, var, name):
     for attr in var.attributes:
         if attr.name == name:
             return attr.value
-    for attr in file.attributes:
+    for attr in info.attributes:
         if attr.name == name:
             return attr.value
     return None
 
 
-def volume_variable(file, var):
+def volume_variable(info, var):
     """
     Extracts information pertaining to the volume variable <var> within the
-    NC3File <file>. The name, shape, origin and data type - mapped to the
+    NC3File <info>. The name, shape, origin and data type - mapped to the
     corresponding numpy type - are stored.
     """
     
@@ -133,12 +133,12 @@ def volume_variable(file, var):
     # -- extract the variable's shape
     dims = var.dimensions
     size = (dims[2].value, dims[1].value, dims[0].value)
-    zdim_total = get_attribute(file, var, 'zdim_total')
+    zdim_total = get_attribute(info, var, 'zdim_total')
     if zdim_total is not None:
         size = (size[0], size[1], zdim_total[0])
 
     # -- determine the origin
-    origin = get_attribute(file, var, 'coordinate_origin_xyz') or (0, 0, 0)
+    origin = get_attribute(info, var, 'coordinate_origin_xyz') or (0, 0, 0)
 
     # -- determine the data type
     (dtype, big_endian_type) = {
@@ -157,7 +157,7 @@ def volume_variable(file, var):
 def find_variable(path):
     """
     Looks for a volume variable to extract slice images from in the
-    NetCDF file at location <path>. Returns an descriptor object of
+    NetCDF info at location <path>. Returns an descriptor object of
     class VolumeVariable if something appropriate is found, or None
     otherwise.
     """
@@ -166,14 +166,18 @@ def find_variable(path):
     var = None
 
     # -- open the NetCDF file
-    file = NC3File(path)
+    fp = open(path)
+    try:
+        info = NC3File(fp)
+    finally:
+        fp.close()
 
     # -- loop through all the variables in the file
-    for v in file.variables:
+    for v in info.variables:
         if (len(v.dimensions) == 3 and v.dimensions[0].value > 1 and
             v.python_type_code in 'bhif'
             ):
-            return volume_variable(file, v)
+            return volume_variable(info, v)
 
 
 def z_slices(variable, path):
@@ -191,20 +195,24 @@ def z_slices(variable, path):
             ... # do something with data
     """
 
-    file = NC3File(path)
+    fp = open(path)
+    try:
+        info = NC3File(fp)
+    finally:
+        fp.close()
 
-    for var in file.variables:
+    for var in info.variables:
         if var.name == variable['name']:
             break
     else:
         return
 
-    if volume_variable(file, var) != variable:
+    if volume_variable(info, var) != variable:
         raise RuntimeError("variable mismatch between files")
 
     (x, y, z) = variable['size']
 
-    z_range = get_attribute(file, var, 'zdim_range')
+    z_range = get_attribute(info, var, 'zdim_range')
     if z_range is None:
         z_range = range(0, z)
     else:
