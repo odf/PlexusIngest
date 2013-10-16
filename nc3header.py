@@ -11,8 +11,6 @@ There is no direct support as yet for reading the actual data.
 
 import os, os.path, re, struct, hashlib
 
-from logger import Logger, LOGGER_TRACE, LOGGER_INFO, LOGGER_WARNING
-
 
 # -- tags found in NetCDF files --
 NC_BYTE      =  1
@@ -249,12 +247,6 @@ class NC3File:
     fingerprint - the MD5 hexdigest value of the header contents
     """
     def __init__(self, fp):
-        # -- some logging
-        log = Logger()
-        log.writeln("Parsing NetCDF header")
-        log.enter()
-        
-        # -- wrap the input stream and parse from it
         fp = MD5Wrapper(fp)
 
         magic = read_values(fp, NC_CHAR, 4)
@@ -268,10 +260,6 @@ class NC3File:
 
         self.header_size = fp.count()
         self.fingerprint = fp.hexdigest()
-        
-        # -- more logging
-        log.trace("Header size is %d." % self.header_size)
-        log.leave()
 
 
 def looksLikeNetCDF(name):
@@ -322,17 +310,11 @@ def nc3file_from_directory(path):
 if __name__ == "__main__":
     import sys
     
-    i = 1
-    if sys.argv[i].startswith("-v"):
-        if sys.argv[i].startswith("-vv"):
-            Logger().priority = LOGGER_TRACE
-        else:
-            Logger().priority = LOGGER_INFO
-        i += 1
+    path = sys.argv[1]
+    name = os.path.splitext(os.path.basename(path))[0]
+    nc3file = nc3file_from_directory(sys.argv[1])
 
-    nc3file = nc3file_from_directory(sys.argv[i])
-
-    buffer = [ "netcdf %s {" % nc3file.name ]
+    buffer = [ "netcdf %s {" % name ]
 
     buffer.append("dimensions:")
     for dim in nc3file.dimensions:
@@ -351,6 +333,6 @@ if __name__ == "__main__":
 
     buffer.append("}")
 
-    fp = file(("%s.cdf" % nc3file.name), 'wb')
+    fp = file(("%s.cdf" % name), 'wb')
     fp.write('\n'.join(buffer) + '\n')
     fp.close()
