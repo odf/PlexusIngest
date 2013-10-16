@@ -5,7 +5,6 @@ import os.path, re, time
 import json
 
 from logger import *
-from nc3header import NC3Info, nc3info_from_directory
 
 
 TYPE2PREFIX = {
@@ -504,15 +503,8 @@ class Process:
 
 class History:
     def __init__(self, source, name = None, creation_time = None):
-        if isinstance(source, dict):
-            attributes = source
-        elif isinstance(source, NC3Info):
-            attributes = self.extract_attributes(source)
-            fingerprint = source.fingerprint
-        elif isinstance(source, str):
-            nc3info = nc3info_from_directory(source)
-            attributes = self.extract_attributes(nc3info)
-            fingerprint = nc3info.fingerprint
+        attributes = self.extract_attributes(source)
+        fingerprint = source.fingerprint
 
         self.logger = Logger()
         self.name = name
@@ -687,6 +679,7 @@ class History:
 
 if __name__ == "__main__":
     import sys
+    from nc3header import nc3info_from_directory
     
     Logger().priority = LOGGER_INFO
 
@@ -696,4 +689,5 @@ if __name__ == "__main__":
         FileCache.cache_location = "/local/projects/d59/assets/nc3cache.db"
         i += 1
     fname = sys.argv[i]
-    print History(fname, fname, time.gmtime(os.stat(fname).st_mtime)).as_json
+    info = nc3info_from_directory(fname)
+    print History(info, fname, time.gmtime(os.stat(fname).st_mtime)).as_json
