@@ -27,8 +27,7 @@ import bz2
 
 from logger import Logger, LOGGER_INFO, LOGGER_WARNING
 import make_image
-from nc3header import NC3Info
-from nc3files import datafiles
+from nc3files import datafiles, nc3info
 
 
 class Histogram:
@@ -167,11 +166,7 @@ def find_variable(path):
     var = None
 
     # -- open the NetCDF file
-    fp = open(path)
-    try:
-        info = NC3Info(fp)
-    finally:
-        fp.close()
+    info = nc3info(path)
 
     # -- loop through all the variables in the file
     for v in info.variables:
@@ -196,11 +191,7 @@ def z_slices(variable, path):
             ... # do something with data
     """
 
-    fp = open(path)
-    try:
-        info = NC3Info(fp)
-    finally:
-        fp.close()
+    info = nc3info(path)
 
     for var in info.variables:
         if var.name == variable['name']:
