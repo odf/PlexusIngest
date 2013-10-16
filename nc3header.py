@@ -5,7 +5,7 @@ This package provides support for parsingNetCDF file headers of format
 version 1, also known as the 'classic' format. This format was used
 exclusively up to NetCDF library version 3.5
 
-The class NC3File is used to parse and represent header information.
+The class NC3Info is used to parse and represent header information.
 There is no direct support as yet for reading the actual data.
 """
 
@@ -233,7 +233,7 @@ class MD5Wrapper:
         return self._md5.hexdigest()
 
 
-class NC3File:
+class NC3Info:
     """
     Represents the complete header data from a NetCDF file. The constructor
     accepts any object with a read() method for parsing that data.
@@ -274,7 +274,7 @@ def basenameNetCDF(name):
         name = name[:-3]
     return name
 
-def nc3file_from_directory(path):
+def nc3info_from_directory(path):
     from file_cache import FileCache
 
     # --- normalize the path name
@@ -300,7 +300,7 @@ def nc3file_from_directory(path):
     fp = FileCache(entries[0])
 
     try:
-        info = NC3File(fp)
+        info = NC3Info(fp)
     finally:
         fp.close()
 
@@ -312,23 +312,23 @@ if __name__ == "__main__":
     
     path = sys.argv[1]
     name = os.path.splitext(os.path.basename(path))[0]
-    nc3file = nc3file_from_directory(sys.argv[1])
+    nc3info = nc3info_from_directory(sys.argv[1])
 
     buffer = [ "netcdf %s {" % name ]
 
     buffer.append("dimensions:")
-    for dim in nc3file.dimensions:
+    for dim in nc3info.dimensions:
         buffer.append("\t%s = %s ;" % (dim.name, dim.value))
 
     buffer.append("variables:")
-    for var in nc3file.variables:
+    for var in nc3info.variables:
         buffer.append("\t%s ;" % var)
         for attr in var.attributes:
             buffer.append("\t\t%s:%s ;" % (var.name, attr))
 
     buffer.append("")
     buffer.append("// global attributes:")
-    for attr in nc3file.attributes:
+    for attr in nc3info.attributes:
         buffer.append("\t\t:%s ;" % attr)
 
     buffer.append("}")

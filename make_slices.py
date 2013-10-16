@@ -27,7 +27,7 @@ import bz2
 
 from logger import Logger, LOGGER_INFO, LOGGER_WARNING
 import make_image
-from nc3header import NC3File
+from nc3header import NC3Info
 
 
 class Histogram:
@@ -105,7 +105,7 @@ class Slice:
 
 def get_attribute(info, var, name):
     """
-    Looks in the open NC3File <info> for the attribute <name>,
+    Looks in the open NC3Info <info> for the attribute <name>,
     first in the given variable <var> and then in the global
     attributes. Return the attribute's value if found, or None
     otherwise.
@@ -123,7 +123,7 @@ def get_attribute(info, var, name):
 def volume_variable(info, var):
     """
     Extracts information pertaining to the volume variable <var> within the
-    NC3File <info>. The name, shape, origin and data type - mapped to the
+    NC3Info <info>. The name, shape, origin and data type - mapped to the
     corresponding numpy type - are stored.
     """
     
@@ -168,7 +168,7 @@ def find_variable(path):
     # -- open the NetCDF file
     fp = open(path)
     try:
-        info = NC3File(fp)
+        info = NC3Info(fp)
     finally:
         fp.close()
 
@@ -197,7 +197,7 @@ def z_slices(variable, path):
 
     fp = open(path)
     try:
-        info = NC3File(fp)
+        info = NC3Info(fp)
     finally:
         fp.close()
 
