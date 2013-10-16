@@ -15,19 +15,6 @@ from file_cache import FileCache
 from logger import Logger, LOGGER_TRACE, LOGGER_INFO, LOGGER_WARNING
 
 
-class NC3Error(RuntimeError):
-    """
-    Class for errors thrown by the NetCDF parser.
-    """
-    def __init__(self, where, text):
-        if isinstance(where, NC3File):
-            RuntimeError.__init__(self, "%s: %s" % (text, where.path))
-        elif isinstance(where, str):
-            RuntimeError.__init__(self, "%s: %s" % (text, where))
-        else:
-            RuntimeError.__init__(self, text)
-
-
 # -- tags found in NetCDF files --
 NC_BYTE      =  1
 NC_CHAR      =  2
@@ -159,7 +146,7 @@ def read_values(fp, type_code, number):
     size = tp.size * number
     value = fp.read(size)
     if len(value) < size:
-        raise Error("Premature end of file.")
+        raise RuntimeError("Premature end of file.")
     fp.read(3 - (size + 3) % 4)
     if type_code == NC_CHAR:
         return value
@@ -172,7 +159,7 @@ def read_integer(fp):
 def read_non_negative(fp):
     n = read_integer(fp)
     if n < 0:
-        raise Error("Non-negative number expected")
+        raise RuntimeError("Non-negative number expected")
     return n
 
 def read_string(fp):
@@ -189,7 +176,7 @@ def read_dimensions(fp):
             size = read_non_negative(fp)
             dimensions.append(NC3Dimension(name, size))
     elif tag != 0 or ndims != 0:
-        raise Error("Expected dimension array.")
+        raise RuntimeError("Expected dimension array.")
 
     return dimensions
 
@@ -205,7 +192,7 @@ def read_attributes(fp):
             values = read_values(fp, type, size)
             attributes.append(NC3Attribute(name, values))
     elif tag != 0 or nattr != 0:
-        raise Error("Expected attribute array.")
+        raise RuntimeError("Expected attribute array.")
 
     return attributes
 
@@ -225,7 +212,7 @@ def read_variables(fp, dimensions):
             start = read_non_negative(fp)
             variables.append(NC3Variable(name, dims, attr, nc_type, size, start))
     elif tag != 0 or nvars != 0:
-        raise Error("Expected variable descriptions.")
+        raise RuntimeError("Expected variable descriptions.")
 
     return variables
 
@@ -281,7 +268,7 @@ class NC3File:
         try:
             magic = read_values(fp, NC_CHAR, 4)
             if magic != "CDF\001":
-                raise NC3Error(self, "Not a NetCDF version 1 file.")
+                raise RuntimeError("Not a NetCDF version 1 file.")
             self.numrecords = read_non_negative(fp)
             self.dimensions = read_dimensions(fp)
             self.attributes = read_attributes(fp)
@@ -326,7 +313,7 @@ def nc3file_from_directory(path):
     else:
         entries = [ path ]
     if not entries:
-        raise NC3Error(path, "No NetCDF files found.")
+        raise RuntimeError("%s: no NetCDF files found." % path)
         
     # -- open the first file and return the object
     return NC3File(entries[0])

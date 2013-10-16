@@ -22,7 +22,6 @@ import json
 
 from file_cache import FileCache
 from logger import *
-from nc3header import NC3Error
 from history import History
 from make_slices import slices
 from simple_upload import Connection
@@ -106,7 +105,7 @@ class Updater(Connection):
         else:
             msg = []
         (type, value, _) = sys.exc_info()
-        if type in (NC3Error, OSError):
+        if type is OSError:
             tb = [ "| %s: %s" % (type.__name__, value) ]
         else:
             tb = list("| " + line
