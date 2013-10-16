@@ -679,7 +679,7 @@ class History:
 
 if __name__ == "__main__":
     import sys
-    from nc3files import nc3info_from_directory
+    from nc3files import nc3info
     
     Logger().priority = LOGGER_INFO
 
@@ -689,5 +689,5 @@ if __name__ == "__main__":
         FileCache.cache_location = "/local/projects/d59/assets/nc3cache.db"
         i += 1
     fname = sys.argv[i]
-    info = nc3info_from_directory(fname)
+    info = nc3info(fname)
     print History(info, fname, time.gmtime(os.stat(fname).st_mtime)).as_json

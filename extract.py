@@ -4,14 +4,14 @@
 # (c)2013 ANUSF
 
 if __name__ == "__main__":
-    import sys, os, os.path, time
+    import sys, os, os.path, time, re
     import optparse
 
     from logger import *
     from file_cache import FileCache
     from history import History
     from make_slices import slices
-    from nc3files import nc3info_from_directory
+    from nc3files import nc3info
     
     Logger().priority = LOGGER_INFO
 
@@ -28,9 +28,9 @@ if __name__ == "__main__":
     mock = options.mock_slices
 
     fname = args[0]
-    info = nc3info_from_directory(fname)
+    info = nc3info(fname)
     h = History(info, fname, time.gmtime(os.stat(fname).st_mtime))
-    fp = file(os.path.basename(fname) + ".json", "w")
+    fp = open(os.path.basename(re.sub('/$', '', fname)) + ".json", "w")
     fp.write(h.as_json)
     fp.close()
 

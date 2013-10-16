@@ -1,47 +1,27 @@
 #!/usr/bin/env python
 
+import os.path, re
 
-def looksLikeNetCDF(name):
-    if name.endswith(".bz2"):
-        name = name[:-4]
-    return name.endswith('_nc') or name.endswith('.nc')
-
-
-def basenameNetCDF(name):
-    if name.endswith(".bz2"):
-        name = name[:-4]
-    if name.endswith(".nc") or name.endswith("_nc"):
-        name = name[:-3]
-    return name
+from file_cache import FileCache
+from nc3header import NC3Info
 
 
-def nc3info_from_directory(path):
-    import os.path
-
-    from file_cache import FileCache
-    from nc3header import NC3Info
-
-    # --- normalize the path name
-    if path.endswith('/'):
-        path = path[:-1]
-    
-    # -- determine the base name for the header file
-    name = basenameNetCDF(os.path.basename(path))
-        
-    # -- collect the files under the given path
+def datafiles(path):
     if os.path.isdir(path):
-        entries = list(os.path.join(root, f)
-                       for (root, dirs, files) in os.walk(path)
-                       for f in files
-                       if looksLikeNetCDF(f))
-        entries.sort()
+        return sorted(os.path.join(root, f)
+                      for (root, dirs, files) in os.walk(path)
+                      for f in files
+                      if re.search(r'[._]nc(\.bz2)?$', f))
     else:
-        entries = [ path ]
-    if not entries:
-        raise RuntimeError("%s: no NetCDF files found." % path)
+        return [ path ]
+
+
+def nc3info(path):
+    files = datafiles(path)
+    if not files:
+        raise RuntimeError("%s: no NetCDF files in directory" % path)
         
-    # -- open the first file and return the object
-    fp = FileCache(entries[0])
+    fp = FileCache(files[0])
 
     try:
         info = NC3Info(fp)
@@ -52,27 +32,27 @@ def nc3info_from_directory(path):
 
 
 if __name__ == "__main__":
-    import sys, os.path
+    import sys
     
     path = sys.argv[1]
-    name = os.path.splitext(os.path.basename(path))[0]
-    nc3info = nc3info_from_directory(sys.argv[1])
+    name = os.path.splitext(os.path.basename(re.sub('/$', '', path)))[0]
+    info = nc3info(path)
 
     buffer = [ "netcdf %s {" % name ]
 
     buffer.append("dimensions:")
-    for dim in nc3info.dimensions:
+    for dim in info.dimensions:
         buffer.append("\t%s = %s ;" % (dim.name, dim.value))
 
     buffer.append("variables:")
-    for var in nc3info.variables:
+    for var in info.variables:
         buffer.append("\t%s ;" % var)
         for attr in var.attributes:
             buffer.append("\t\t%s:%s ;" % (var.name, attr))
 
     buffer.append("")
     buffer.append("// global attributes:")
-    for attr in nc3info.attributes:
+    for attr in info.attributes:
         buffer.append("\t\t:%s ;" % attr)
 
     buffer.append("}")

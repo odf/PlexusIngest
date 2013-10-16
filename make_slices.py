@@ -28,6 +28,7 @@ import bz2
 from logger import Logger, LOGGER_INFO, LOGGER_WARNING
 import make_image
 from nc3header import NC3Info
+from nc3files import datafiles
 
 
 class Histogram:
@@ -371,13 +372,7 @@ def slices(path,
     log       = Logger()
 
     # -- collect the list of files to be processed
-    if os.path.isdir(path):
-        entries = list(os.path.join(root, f)
-                       for (root, dirs, files) in os.walk(path)
-                       for f in files)
-        entries.sort()
-    else:
-        entries = [ path ]
+    entries = datafiles(path)
     if not entries:
         return
 
