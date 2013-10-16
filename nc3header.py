@@ -11,7 +11,6 @@ There is no direct support as yet for reading the actual data.
 
 import os, os.path, re, struct, hashlib
 
-from file_cache import FileCache
 from logger import Logger, LOGGER_TRACE, LOGGER_INFO, LOGGER_WARNING
 
 
@@ -229,9 +228,6 @@ class MD5Wrapper:
         self._md5.update(data)
         return data
 
-    def close(self):
-        return self._fp.close()
-
     def count(self):
         return self._count
 
@@ -241,42 +237,37 @@ class MD5Wrapper:
 
 class NC3File:
     """
-    Represents the complete header data from a NetCDF file. The
-    constructor accepts a file system path and an optional name for the
-    data set. All methods are for internal use only.
+    Represents the complete header data from a NetCDF file. The constructor
+    accepts any object with a read() method for parsing that data.
     
     Useful properties:
     
-    path        - the file's location on the file system
     dimensions  - the list of dimensions defined (type NC3Dimension)
     attributes  - the list of attributes defined (type NC3Attribute)
     variables   - the list of variables (type NC3Variable)
     header_size - the header size on file in bytes
     fingerprint - the MD5 hexdigest value of the header contents
     """
-    def __init__(self, path):
-        # -- remember the file system path
-        self.path = path
-
+    def __init__(self, fp):
         # -- some logging
         log = Logger()
-        log.writeln("Parsing NetCDF header from %s..." % path)
+        log.writeln("Parsing NetCDF header")
         log.enter()
         
-        # -- open the physical file, parse and close
-        fp = MD5Wrapper(FileCache(path))
-        try:
-            magic = read_values(fp, NC_CHAR, 4)
-            if magic != "CDF\001":
-                raise RuntimeError("Not a NetCDF version 1 file.")
-            self.numrecords = read_non_negative(fp)
-            self.dimensions = read_dimensions(fp)
-            self.attributes = read_attributes(fp)
-            self.variables  = read_variables(fp, self.dimensions)
-        finally:
-            self.header_size = fp.count()
-            self.fingerprint = fp.hexdigest()
-            fp.close()
+        # -- wrap the input stream and parse from it
+        fp = MD5Wrapper(fp)
+
+        magic = read_values(fp, NC_CHAR, 4)
+        if magic != "CDF\001":
+            raise RuntimeError("Not a NetCDF version 1 file.")
+
+        self.numrecords = read_non_negative(fp)
+        self.dimensions = read_dimensions(fp)
+        self.attributes = read_attributes(fp)
+        self.variables  = read_variables(fp, self.dimensions)
+
+        self.header_size = fp.count()
+        self.fingerprint = fp.hexdigest()
         
         # -- more logging
         log.trace("Header size is %d." % self.header_size)
@@ -296,6 +287,8 @@ def basenameNetCDF(name):
     return name
 
 def nc3file_from_directory(path):
+    from file_cache import FileCache
+
     # --- normalize the path name
     if path.endswith('/'):
         path = path[:-1]
@@ -316,7 +309,14 @@ def nc3file_from_directory(path):
         raise RuntimeError("%s: no NetCDF files found." % path)
         
     # -- open the first file and return the object
-    return NC3File(entries[0])
+    fp = FileCache(entries[0])
+
+    try:
+        info = NC3File(fp)
+    finally:
+        fp.close()
+
+    return info
 
 
 if __name__ == "__main__":
