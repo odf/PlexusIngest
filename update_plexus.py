@@ -24,7 +24,7 @@ from file_cache import FileCache
 from logger import *
 from history import History
 from make_slices import slices
-from nc3header import nc3info_from_directory
+from nc3files import nc3info_from_directory
 from simple_upload import Connection
 
 

@@ -679,7 +679,7 @@ class History:
 
 if __name__ == "__main__":
     import sys
-    from nc3header import nc3info_from_directory
+    from nc3files import nc3info_from_directory
     
     Logger().priority = LOGGER_INFO
 
