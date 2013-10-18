@@ -509,6 +509,21 @@ class History:
         self.name = name
         self.creation_time = creation_time
         self.processes = extract_processes(attributes)
+
+        self.process_by_name = {}
+        for p in self.processes:
+            if self.process_by_name.get(p.name):
+                p.log_error("Duplicate name within history.")
+            else:
+                self.process_by_name[p.name] = p
+
+        self.process_by_id = {}
+        for p in self.processes:
+            if self.process_by_id.get(p.identifier):
+                p.log_error("Duplicate identifier within history.")
+            else:
+                self.process_by_id[p.identifier] = p
+
         self.resolve_inputs()
         main = self.main_process()
         if main:
@@ -521,36 +536,6 @@ class History:
             if main.name is None:
                 main.name = main.data_file['name']
     
-    def process_by_name(self, name):
-        if not hasattr(self, '_name2process'):
-            name2process = {}
-            for p in self.processes:
-                if name2process.get(p.name):
-                    p.log_error("Duplicate name within history.")
-                else:
-                    name2process[p.name] = p
-            self._name2process = name2process
-        return self._name2process.get(name)
-
-    def process_by_id(self, identifier):
-        if not hasattr(self, '_id2process'):
-            id2process = {}
-            for p in self.processes:
-                if id2process.get(p.identifier):
-                    p.log_error("Duplicate identifier within history.")
-                else:
-                    id2process[p.identifier] = p
-            self._id2process =id2process
-        return self._id2process.get(identifier)
-
-    def find_process(self, entry):
-        if entry.get('identifier'):
-            return self.process_by_id(entry['identifier'])
-        elif entry.get('name'):
-            return self.process_by_name(entry['name'])
-        else:
-            return None
-
     def resolve_inputs(self):
         for p in self.processes:
             names = {}
@@ -559,7 +544,7 @@ class History:
                 if entry.get('identifier'):
                     idents[entry['identifier']] = True
                 elif entry.get('name'):
-                    pred = self.find_process(entry)
+                    pred = self.process_by_name.get(entry['name'])
                     if pred is None:
                         names[entry['name']] = True
                     elif p.identifier != pred.identifier:
@@ -574,7 +559,7 @@ class History:
         if self.name:
             name = stripped_name(self.name)
             self.logger.trace("Stripped name: " + name)
-            main = self.process_by_name(name)
+            main = self.process_by_name.get(name)
             if main: return main
         else:
             name = None
@@ -583,7 +568,10 @@ class History:
         used = {}
         for p in self.processes:
             for q in p.inputs:
-                r = self.find_process(q)
+                if q.get('identifier'):
+                    r = self.process_by_id.get(q['identifier'])
+                elif q.get('name'):
+                    r = self.process_by_name.get(q['name'])
                 if r and r != p:
                     used[r] = True
 
