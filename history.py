@@ -8,13 +8,14 @@ from logger import *
 
 
 TYPE2PREFIX = {
-  "Projection_Set":             "proj",
-  "Tomographic_Data":           "tomo",
-  "Tomographic_Data_Container": "cntr_tomo",
-  "Segmented_Data":             "segmented",
-  "Distance_Map_Data":          "distance_map",
-  "Medial_Axis_Data":           "medial_axis",
-  "Label_Data":                 "labels"
+  "Projection_Set":                  "proj",
+  "Tomographic_Data":                "tomo",
+  "Tomographic_Data_Floating_Point": "tomo_float",
+  "Tomographic_Data_Container":      "cntr_tomo",
+  "Segmented_Data":                  "segmented",
+  "Distance_Map_Data":               "distance_map",
+  "Medial_Axis_Data":                "medial_axis",
+  "Label_Data":                      "labels"
 }
 
 PREFIX2TYPE = dict((value, key) for (key, value) in TYPE2PREFIX.items())
@@ -44,20 +45,18 @@ class Patterns:
     timeForID   = '%Y%m%d_%H%M%S'
     timeFormat  = "%Y/%m/%d %H:%M:%S UTC"
 
-    @classmethod
-    def result_type(cls, name):
-        match = cls.namePrefix.match(name or '')
-        if match:
-            prefix = match.group(0)
-            return PREFIX2TYPE.get(prefix) or prefix
-        else:
-            return None
 
-    @classmethod
-    def stripped_name(cls, name):
-        return re.sub('_header$', '',
-                      re.sub(r'[_.?]nc$', '', os.path.basename(name)))
+def type_for_name(name):
+    match = Patterns.namePrefix.match(name or '')
+    if match:
+        prefix = match.group(0)
+        return PREFIX2TYPE.get(prefix) or prefix
+    else:
+        return None
 
+def stripped_name(name):
+    return re.sub('_header$', '',
+                  re.sub(r'[_.?]nc$', '', os.path.basename(name)))
 
 def parse_time(stime, sdate):
     return time.strptime(stime + '_' + sdate, Patterns.timeForID)
@@ -473,7 +472,7 @@ class Process:
 
     @property
     def result_type(self):
-        return Patterns.result_type(self.name)
+        return type_for_name(self.name)
 
     def log_error(self, text):
         self._errors.append(text)
@@ -515,7 +514,7 @@ class History:
         if main:
             main.domain = self.extract_domain(attributes)
             main.data_file = {
-                'name': Patterns.stripped_name(self.name),
+                'name': stripped_name(self.name),
                 'date': format_time(self.creation_time),
                 'fingerprint': fingerprint
                 }
@@ -618,7 +617,7 @@ class History:
     def main_process(self):
         # -- try to find a process with the same name as the source file
         if self.name:
-            name = Patterns.stripped_name(self.name)
+            name = stripped_name(self.name)
             self.logger.trace("Stripped name: " + name)
             main = self.process_by_name(name)
             if main: return main
@@ -639,7 +638,7 @@ class History:
         eligible.reverse()
         
         # -- get the most recent one of the correct type
-        target_type = Patterns.result_type(name)
+        target_type = type_for_name(name)
         candidates = list(p for p in eligible if p.result_type == target_type)
         if candidates:
             return candidates[0]
