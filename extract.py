@@ -31,7 +31,7 @@ if __name__ == "__main__":
     info = nc3info(fname)
     h = History(info, fname, time.gmtime(os.stat(fname).st_mtime))
     fp = open(os.path.basename(re.sub('/$', '', fname)) + ".json", "w")
-    fp.write(h.as_json)
+    fp.write(as_json(h))
     fp.close()
 
     for (data, name, action) in slices(fname, dry_run = mock):

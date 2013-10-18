@@ -353,8 +353,8 @@ class Updater(Connection):
                 if self.dry_run:
                     self.print_action(project, sample, location, name, action)
                 else:
-                    data = History(nc3info(path), path,
-                                   time.gmtime(mtime)).as_json
+                    h = History(nc3info(path), path, time.gmtime(mtime))
+                    data = as_json(h)
                     _, res = self.upload_files(project, sample,
                                                t, ((data, path),))
                     seen[name]['IdExt'] = res.get('MainNodeExternalID')

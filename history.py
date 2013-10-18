@@ -600,10 +600,10 @@ class History:
         elif eligible:
             return eligible[0]
 
-    @property
-    def as_json(self):
-        return json.dumps(list(p.record for p in self.processes),
-                          sort_keys = True, indent = 4)
+
+def as_json(history):
+    return json.dumps(list(p.record for p in history.processes),
+                      sort_keys = True, indent = 4)
 
 def set_xyz(target, name, vec):
     if len(vec) >= 3:
@@ -690,4 +690,5 @@ if __name__ == "__main__":
         i += 1
     fname = sys.argv[i]
     info = nc3info(fname)
-    print History(info, fname, time.gmtime(os.stat(fname).st_mtime)).as_json
+    timestamp = time.gmtime(os.stat(fname).st_mtime)
+    print as_json(History(info, fname, timestamp))
