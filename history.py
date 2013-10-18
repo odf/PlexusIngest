@@ -502,17 +502,17 @@ class Process:
 
 class History:
     def __init__(self, source, name = None, creation_time = None):
-        attributes = self.extract_attributes(source)
+        attributes = extract_attributes(source)
         fingerprint = source.fingerprint
 
         self.logger = Logger()
         self.name = name
         self.creation_time = creation_time
-        self.processes = self.extract_processes(attributes)
+        self.processes = extract_processes(attributes)
         self.resolve_inputs()
         main = self.main_process()
         if main:
-            main.domain = self.extract_domain(attributes)
+            main.domain = extract_domain(attributes)
             main.data_file = {
                 'name': stripped_name(self.name),
                 'date': format_time(self.creation_time),
@@ -521,51 +521,6 @@ class History:
             if main.name is None:
                 main.name = main.data_file['name']
     
-    def extract_attributes(self, source):
-        result = {}
-        for attr in source.attributes:
-            result.setdefault(attr.name, attr.value)
-        for var in source.variables:
-            if len(var.dimensions) == 3 and var.dimensions[0].value > 1:
-                for attr in var.attributes:
-                    result.setdefault(attr.name, attr.value)
-        return result
-        
-    def extract_processes(self, attributes):
-        result = []
-
-        for key in attributes.keys():
-            if not re.match('history_', key): continue
-            
-            fields = re.split('_+', key.strip())
-            if fields[-1] == "output": continue
-        
-            identifier = re.sub('history_+(UTC_+)?', '', key)
-
-            if fields[1] == "UTC":
-              fields = fields[2:]
-            else:
-              fields = fields[1:]
-
-            if re.match('\d+$', fields[0]):
-                timestamp = parse_time(fields[0], fields[1])
-                fields = fields[2:]
-            else:
-                timestamp = None
-            
-            if len(fields) > 0:
-                name = re.sub('[_.?]nc$', "", "_".join(fields))
-            else:
-                name = None
-        
-            text = attributes[key]
-            output = attributes.get(key + "_output")
-        
-            result.append(Process(timestamp, name, identifier, text, output))
-      
-        result.sort()
-        return result
-
     def process_by_name(self, name):
         if not hasattr(self, '_name2process'):
             name2process = {}
@@ -645,35 +600,81 @@ class History:
         elif eligible:
             return eligible[0]
 
-    def set_xyz(self, target, name, vec):
-        if len(vec) >= 3:
-            target.update(dict((name + '_' + 'xyz'[i], vec[i]) for i in (0,1,2)))
-
-    def extract_domain(self, attr):
-        result = {}
-        t = attr.get("total_grid_size") or attr.get("total_grid_size_xyz")
-        if t: self.set_xyz(result, "domain_size", t)
-        t = attr.get("coordinate_origin") or attr.get("coordinate_origin_xyz")
-        if t: self.set_xyz(result, "domain_origin", t)
-        
-        voxel_size = attr.get("voxel_size") or attr.get("voxel_size_xyz")
-        voxel_unit = attr.get("voxel_unit") or ''
-
-        if re.match('mm$|millimet(re|er)', voxel_unit):
-            voxel_unit = "micron"
-            voxel_size = list(x * 1000.0 for x in voxel_size or ())
-        elif re.match('micro(metre|meter|n)', voxel_unit):
-            voxel_unit = "micron"
-        
-        if voxel_size: self.set_xyz(result, "voxel_size", voxel_size)
-        if voxel_unit: result["voxel_unit"] = voxel_unit
-
-        return result
-
     @property
     def as_json(self):
         return json.dumps(list(p.record for p in self.processes),
                           sort_keys = True, indent = 4)
+
+def set_xyz(target, name, vec):
+    if len(vec) >= 3:
+        target.update(dict((name + '_' + 'xyz'[i], vec[i]) for i in (0,1,2)))
+
+def extract_attributes(source):
+    result = {}
+    for attr in source.attributes:
+        result.setdefault(attr.name, attr.value)
+    for var in source.variables:
+        if len(var.dimensions) == 3 and var.dimensions[0].value > 1:
+            for attr in var.attributes:
+                result.setdefault(attr.name, attr.value)
+    return result
+
+def extract_domain(attr):
+    result = {}
+    t = attr.get("total_grid_size") or attr.get("total_grid_size_xyz")
+    if t: set_xyz(result, "domain_size", t)
+    t = attr.get("coordinate_origin") or attr.get("coordinate_origin_xyz")
+    if t: set_xyz(result, "domain_origin", t)
+
+    voxel_size = attr.get("voxel_size") or attr.get("voxel_size_xyz")
+    voxel_unit = attr.get("voxel_unit") or ''
+
+    if re.match('mm$|millimet(re|er)', voxel_unit):
+        voxel_unit = "micron"
+        voxel_size = list(x * 1000.0 for x in voxel_size or ())
+    elif re.match('micro(metre|meter|n)', voxel_unit):
+        voxel_unit = "micron"
+
+    if voxel_size: set_xyz(result, "voxel_size", voxel_size)
+    if voxel_unit: result["voxel_unit"] = voxel_unit
+
+    return result
+
+def extract_processes(attributes):
+    result = []
+
+    for key in attributes.keys():
+        if not re.match('history_', key): continue
+
+        fields = re.split('_+', key.strip())
+        if fields[-1] == "output": continue
+
+        identifier = re.sub('history_+(UTC_+)?', '', key)
+
+        if fields[1] == "UTC":
+          fields = fields[2:]
+        else:
+          fields = fields[1:]
+
+        if re.match('\d+$', fields[0]):
+            timestamp = parse_time(fields[0], fields[1])
+            fields = fields[2:]
+        else:
+            timestamp = None
+
+        if len(fields) > 0:
+            name = re.sub('[_.?]nc$', "", "_".join(fields))
+        else:
+            name = None
+
+        text = attributes[key]
+        output = attributes.get(key + "_output")
+
+        result.append(Process(timestamp, name, identifier, text, output))
+
+    result.sort()
+    return result
+
 
 
 if __name__ == "__main__":
