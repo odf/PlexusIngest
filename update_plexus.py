@@ -22,7 +22,7 @@ import json
 
 from file_cache import FileCache
 from logger import *
-from history import History
+from history import History, as_json
 from make_slices import slices
 from nc3files import nc3info
 from simple_upload import Connection

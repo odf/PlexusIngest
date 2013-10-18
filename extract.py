@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     from logger import *
     from file_cache import FileCache
-    from history import History
+    from history import History, as_json
     from make_slices import slices
     from nc3files import nc3info
     
